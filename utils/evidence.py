@@ -296,9 +296,10 @@ def insert_evidence(
                 items.extend(evidence_downloader(file_id))
         except Exception as exc:
             message = str(exc)
-            if "403" in message or "forbidden" in message.lower():
+            status_code = getattr(exc, "status_code", None)
+            if status_code == 403:
                 warnings.append(f"Akses ditolak (403): {identifier}")
-            elif "404" in message:
+            elif status_code == 404:
                 warnings.append(f"File tidak ditemukan (404): {identifier}")
             else:
                 warnings.append(f"Gagal memuat {identifier}: {message}")

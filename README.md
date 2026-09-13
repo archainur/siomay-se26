@@ -144,7 +144,7 @@ Ekstensi file pada URL tidak wajib. Server harus mengembalikan byte gambar yang 
 
 - Atur akses file menjadi **Anyone with the link / Siapa saja yang memiliki tautan**.
 - Jika file berasal dari folder unggahan Google Forms, pastikan folder tersebut juga dapat diakses melalui tautan.
-- Gunakan tautan file Google Drive yang valid atau URL HTTP(S) yang dapat diakses oleh komputer yang menjalankan SIOMAY; beberapa tautan dapat dipisahkan dengan koma pada kolom yang mendukung banyak gambar.
+- Gunakan tautan file Google Drive yang valid, bare file ID Google Drive lama, atau URL HTTP(S) yang dapat diakses oleh komputer yang menjalankan SIOMAY; beberapa tautan dapat dipisahkan dengan koma pada kolom yang mendukung banyak gambar.
 - Format JPEG, PNG, HEIC, dan HEIF didukung pada alur gambar. PDF didukung pada BAPP Termin 2, BAST, dan placeholder kustom yang memakai evidence layout; BAPP Termin 1 dan Bukti Terima tetap mengharapkan satu atau beberapa gambar sesuai layout masing-masing.
   Setiap halaman PDF dirender dan disisipkan sebagai halaman khusus. Orientasi
   EXIF pada gambar diterapkan otomatis.

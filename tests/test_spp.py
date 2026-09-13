@@ -137,7 +137,7 @@ class SppTermin1InputNameTests(unittest.TestCase):
             stream.seek(0)
 
             with patch(
-                "utils.images.download_url_evidence",
+                "utils.images.download_evidence_source",
                 return_value=[("image", stream, (100, 60))],
             ):
                 events = list(spp.iter_generate(

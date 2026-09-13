@@ -34,6 +34,7 @@ from utils.images import (
     HAS_HEIF,
     HAS_PIL,
     download_image_source as _universal_image_downloader,
+    extract_drive_file_id as _extract_file_id,
 )
 
 
@@ -267,23 +268,6 @@ def replace_text_preserving_runs(doc: Document, replacements: dict) -> None:
                 _process_table(table)
 
 
-def _extract_file_id(link: str):
-    """Ambil file ID untuk kompatibilitas helper lama."""
-    link = link.strip()
-    if not link:
-        return None
-    m = re.search(r"[?&]id=([-\w]+)", link)
-    if m:
-        return m.group(1)
-    m = re.search(r"/d/([-\w]+)", link)
-    if m:
-        return m.group(1)
-    m = re.search(r"[-\w]{25,}", link)
-    if m:
-        return m.group(0)
-    return None
-
-
 def _remove_table_borders(table):
     tbl = table._tbl
     tblPr = tbl.tblPr
@@ -369,9 +353,10 @@ def insert_evidence_images(doc: Document, links_str: str,
             images.append((fh, img))
         except Exception as e:
             msg = str(e)
-            if "403" in msg or "forbidden" in msg.lower():
+            status_code = getattr(e, "status_code", None)
+            if status_code == 403:
                 warnings_list.append(f"Akses ditolak (403): {link}")
-            elif "404" in msg:
+            elif status_code == 404:
                 warnings_list.append(f"File tidak ditemukan (404): {link}")
             else:
                 warnings_list.append(f"Gagal memuat {link}: {msg}")

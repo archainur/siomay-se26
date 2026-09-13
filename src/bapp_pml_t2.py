@@ -30,6 +30,7 @@ from utils.images import (
     HAS_HEIF,
     HAS_PIL,
     download_evidence_source as _universal_evidence_downloader,
+    extract_drive_file_id as _extract_file_id,
 )
 from utils.evidence import (
     IMAGE_ORIENTATION_AUTOMATIC,
@@ -266,23 +267,6 @@ def replace_text_preserving_runs(doc: Document, replacements: dict) -> None:
             _process_paragraphs(story.paragraphs)
             for table in story.tables:
                 _process_table(table)
-
-
-def _extract_file_id(link: str):
-    """Ambil file ID dari tautan Google Drive untuk kompatibilitas lama."""
-    link = link.strip()
-    if not link:
-        return None
-    m = re.search(r"[?&]id=([-\w]+)", link)
-    if m:
-        return m.group(1)
-    m = re.search(r"/d/([-\w]+)", link)
-    if m:
-        return m.group(1)
-    m = re.search(r"[-\w]{25,}", link)
-    if m:
-        return m.group(0)
-    return None
 
 
 _default_evidence_downloader = _universal_evidence_downloader

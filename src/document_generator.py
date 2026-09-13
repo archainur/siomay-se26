@@ -217,7 +217,7 @@ def insert_custom_url_images(doc, row, builtin_fields=(), *,
         return set()
     from utils.evidence import insert_evidence_items
     from utils.images import (
-        download_url_evidence,
+        download_evidence_source,
     )
 
     builtin = {str(field) for field in builtin_fields}
@@ -234,7 +234,7 @@ def insert_custom_url_images(doc, row, builtin_fields=(), *,
             continue
         try:
             if downloader is None:
-                items = download_url_evidence(value)
+                items = download_evidence_source(value)
             else:
                 # Preserve the injectable legacy downloader contract used by
                 # callers/tests: ``(PNG stream, open PIL image)``.

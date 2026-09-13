@@ -12,7 +12,7 @@ from __future__ import annotations
 import io
 import re
 import time
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -50,6 +50,38 @@ DEFAULT_WEB_MAX_RETRIES = 3
 DEFAULT_WEB_RETRY_DELAY = 0.5
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _STREAM_CHUNK_SIZE = 64 * 1024
+_DRIVE_FILE_ID_RE = re.compile(r"[A-Za-z0-9_-]+\Z")
+_BARE_DRIVE_FILE_ID_RE = re.compile(r"[A-Za-z0-9_-]{10,}\Z")
+_GOOGLE_DRIVE_HOSTS = frozenset({
+    "drive.google.com",
+    "www.drive.google.com",
+    "docs.google.com",
+    "www.docs.google.com",
+    "drive.usercontent.google.com",
+})
+
+
+class SourceDownloadError(RuntimeError):
+    """Structured failure raised while retrieving an evidence source.
+
+    ``status_code`` is deliberately kept separate from the rendered message
+    so callers never need to infer HTTP status from arbitrary URL text.
+    ``kind`` is a small classification for callers that need to distinguish
+    HTTP, timeout, and connection failures without parsing strings.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        source: str | None = None,
+        status_code: int | None = None,
+        kind: str | None = None,
+    ):
+        self.source = source
+        self.status_code = status_code
+        self.kind = kind
+        super().__init__(message)
 
 
 class _DownloadHTTPError(RuntimeError):
@@ -62,26 +94,60 @@ class _DownloadHTTPError(RuntimeError):
 
 
 def extract_drive_file_id(link: str) -> str | None:
-    """Extract a file ID from the common public Google Drive URL formats."""
+    """Extract a bare ID or ID from a supported public Google Drive URL.
+
+    Generic HTTP(S) URLs are intentionally not inspected for an ``id`` query
+    parameter. This keeps URLs such as ``https://example.com/download?id=123``
+    on the generic HTTP(S) path.
+    """
     value = str(link or "").strip()
-    patterns = (
-        r"/file/d/([^/?#]+)",
-        r"[?&]id=([^&#]+)",
-        r"/d/([^/?#]+)",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, value)
-        if match:
+    if _is_bare_drive_file_id(value):
+        return value
+    if not _is_google_drive_url(value):
+        return None
+
+    parsed = urlparse(value)
+    for pattern in (r"^/file/d/([^/?#]+)", r"^/d/([^/?#]+)"):
+        match = re.search(pattern, parsed.path)
+        if match and _is_drive_file_id(match.group(1)):
             return match.group(1)
+
+    query_id = parse_qs(parsed.query).get("id", [None])[0]
+    if query_id and _is_drive_file_id(query_id):
+        return query_id
     return None
 
 
-def _is_google_drive_url(value: str) -> bool:
-    """Return whether *value* points at a Google Drive share host."""
-    hostname = (urlparse(value).hostname or "").lower()
-    return hostname == "drive.google.com" or hostname.endswith(
-        ".drive.google.com"
+def _is_drive_file_id(value: str) -> bool:
+    return bool(_DRIVE_FILE_ID_RE.fullmatch(str(value or "").strip()))
+
+
+def _is_bare_drive_file_id(value: str) -> bool:
+    return bool(_BARE_DRIVE_FILE_ID_RE.fullmatch(str(value or "").strip()))
+
+
+def _is_google_drive_host(hostname: str | None) -> bool:
+    """Return whether *hostname* is one of the explicitly supported hosts."""
+    return (hostname or "").lower().rstrip(".") in _GOOGLE_DRIVE_HOSTS
+
+
+def _is_google_drive_source(value: str) -> bool:
+    """Return whether a source is a bare Drive ID or supported Drive URL."""
+    value = str(value or "").strip()
+    if _is_bare_drive_file_id(value):
+        return True
+    parsed = urlparse(value)
+    return (
+        parsed.scheme.lower() in {"http", "https"}
+        and bool(parsed.netloc)
+        and _is_google_drive_host(parsed.hostname)
     )
+
+
+def _is_google_drive_url(value: str) -> bool:
+    """Compatibility wrapper for supported Google Drive URLs only."""
+    value = str(value or "").strip()
+    return not _is_bare_drive_file_id(value) and _is_google_drive_source(value)
 
 
 def _validate_http_url(value: str):
@@ -372,28 +438,39 @@ def _download_drive_bytes(
                 if exc.status_code in _RETRYABLE_STATUS_CODES and attempt < max_retries:
                     _wait_before_retry(attempt, max_retries, retry_delay)
                     continue
-                raise RuntimeError(_http_error_message(exc, attempt)) from exc
+                raise SourceDownloadError(
+                    _http_error_message(exc, attempt),
+                    source=exc.url,
+                    status_code=exc.status_code,
+                    kind="http",
+                ) from exc
             except requests.Timeout as exc:
                 if attempt < max_retries:
                     _wait_before_retry(attempt, max_retries, retry_delay)
                     continue
-                raise RuntimeError(
+                raise SourceDownloadError(
                     f"Waktu tunggu habis saat mengambil gambar Google Drive "
-                    f"{file_id}."
+                    f"{file_id}.",
+                    source=file_id,
+                    kind="timeout",
                 ) from exc
             except requests.ConnectionError as exc:
                 if attempt < max_retries:
                     _wait_before_retry(attempt, max_retries, retry_delay)
                     continue
-                raise RuntimeError(
-                    f"Koneksi gagal saat mengambil gambar Google Drive {file_id}."
+                raise SourceDownloadError(
+                    f"Koneksi gagal saat mengambil gambar Google Drive {file_id}.",
+                    source=file_id,
+                    kind="connection",
                 ) from exc
             except requests.RequestException as exc:
                 if attempt < max_retries:
                     _wait_before_retry(attempt, max_retries, retry_delay)
                     continue
-                raise RuntimeError(
-                    f"Gagal mengunduh file Google Drive {file_id}: {exc}"
+                raise SourceDownloadError(
+                    f"Gagal mengunduh file Google Drive {file_id}: {exc}",
+                    source=file_id,
+                    kind="network",
                 ) from exc
             finally:
                 if response is not None:
@@ -456,21 +533,36 @@ def _download_url_bytes(
             if exc.status_code in _RETRYABLE_STATUS_CODES and attempt < max_retries:
                 _wait_before_retry(attempt, max_retries, retry_delay)
                 continue
-            raise RuntimeError(_http_error_message(exc, attempt)) from exc
+            raise SourceDownloadError(
+                _http_error_message(exc, attempt),
+                source=exc.url,
+                status_code=exc.status_code,
+                kind="http",
+            ) from exc
         except requests.Timeout as exc:
             if attempt < max_retries:
                 _wait_before_retry(attempt, max_retries, retry_delay)
                 continue
-            raise RuntimeError(
-                f"Waktu tunggu habis saat mengambil gambar: {url}"
+            raise SourceDownloadError(
+                f"Waktu tunggu habis saat mengambil gambar: {url}",
+                source=url,
+                kind="timeout",
             ) from exc
         except requests.ConnectionError as exc:
             if attempt < max_retries:
                 _wait_before_retry(attempt, max_retries, retry_delay)
                 continue
-            raise RuntimeError(f"Koneksi gagal saat mengambil gambar: {url}") from exc
+            raise SourceDownloadError(
+                f"Koneksi gagal saat mengambil gambar: {url}",
+                source=url,
+                kind="connection",
+            ) from exc
         except requests.RequestException as exc:
-            raise RuntimeError(f"Gagal mengunduh resource: {url}") from exc
+            raise SourceDownloadError(
+                f"Gagal mengunduh resource: {url}",
+                source=url,
+                kind="network",
+            ) from exc
         finally:
             if response is not None:
                 response.close()
@@ -518,29 +610,38 @@ def _evidence_items_from_bytes(
     return [("image", stream, size)]
 
 
-def download_url_image(
-    url: str,
+def _resolve_source(source: str) -> tuple[str, str]:
+    """Resolve a source into ``("drive", file_id)`` or ``("http", url)``."""
+    value = str(source or "").strip()
+    file_id = extract_drive_file_id(value)
+    if file_id:
+        return "drive", file_id
+    if _is_google_drive_url(value):
+        raise RuntimeError("Tautan Google Drive tidak memiliki file ID.")
+    _validate_http_url(value)
+    return "http", value
+
+
+def download_image_source(
+    source: str,
     *,
     timeout: float = 15,
     max_bytes: int = MAX_WEB_IMAGE_BYTES,
     max_retries: int = DEFAULT_WEB_MAX_RETRIES,
     retry_delay: float = DEFAULT_WEB_RETRY_DELAY,
 ):
-    """Download any HTTP(S) image source and return a normalized PNG image.
+    """Download one image source and return a normalized PNG image.
 
-    Google Drive share URLs use the existing confirmation-aware downloader.
-    Other URLs are streamed with a size limit and bounded retries. The final
-    image type is determined by Pillow, not by the URL extension or header.
+    ``source`` may be a bare Google Drive file ID, a supported Google Drive
+    URL, or any other HTTP(S) URL. Drive sources use the existing
+    confirmation-aware downloader; other URLs are streamed with a size limit
+    and bounded retries. The final image type is determined by Pillow, not by
+    the URL extension or header.
     """
-    value = str(url or "").strip()
-    _validate_http_url(value)
-
-    if _is_google_drive_url(value):
-        file_id = extract_drive_file_id(value)
-        if not file_id:
-            raise RuntimeError("Tautan Google Drive tidak memiliki file ID.")
+    source_kind, value = _resolve_source(source)
+    if source_kind == "drive":
         return download_drive_image(
-            file_id,
+            value,
             timeout=timeout,
             max_retries=max_retries,
             retry_delay=retry_delay,
@@ -553,24 +654,23 @@ def download_url_image(
     return image_bytes_to_png(raw_bytes, content_type)
 
 
-def download_url_evidence(
-    url: str,
+def download_evidence_source(
+    source: str,
     *,
     timeout: float = 15,
     max_bytes: int = MAX_WEB_IMAGE_BYTES,
     max_retries: int = DEFAULT_WEB_MAX_RETRIES,
     retry_delay: float = DEFAULT_WEB_RETRY_DELAY,
 ):
-    """Download any HTTP(S) image/PDF source as evidence layout items."""
-    value = str(url or "").strip()
-    _validate_http_url(value)
+    """Download one image/PDF source as evidence layout items.
 
-    if _is_google_drive_url(value):
-        file_id = extract_drive_file_id(value)
-        if not file_id:
-            raise RuntimeError("Tautan Google Drive tidak memiliki file ID.")
+    The resolver accepts the same source forms as :func:`download_image_source`
+    and keeps Google Drive confirmation handling in the shared module.
+    """
+    source_kind, value = _resolve_source(source)
+    if source_kind == "drive":
         return download_drive_evidence(
-            file_id,
+            value,
             timeout=timeout,
             max_retries=max_retries,
             retry_delay=retry_delay,
@@ -607,7 +707,37 @@ def download_drive_evidence(
     )
 
 
-# Explicit names for generator code. The old download_url_* names remain part
-# of the compatibility surface used by custom placeholders and older callers.
-download_image_source = download_url_image
-download_evidence_source = download_url_evidence
+def download_url_image(
+    url: str,
+    *,
+    timeout: float = 15,
+    max_bytes: int = MAX_WEB_IMAGE_BYTES,
+    max_retries: int = DEFAULT_WEB_MAX_RETRIES,
+    retry_delay: float = DEFAULT_WEB_RETRY_DELAY,
+):
+    """Backward-compatible wrapper for :func:`download_image_source`."""
+    return download_image_source(
+        url,
+        timeout=timeout,
+        max_bytes=max_bytes,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+    )
+
+
+def download_url_evidence(
+    url: str,
+    *,
+    timeout: float = 15,
+    max_bytes: int = MAX_WEB_IMAGE_BYTES,
+    max_retries: int = DEFAULT_WEB_MAX_RETRIES,
+    retry_delay: float = DEFAULT_WEB_RETRY_DELAY,
+):
+    """Backward-compatible wrapper for :func:`download_evidence_source`."""
+    return download_evidence_source(
+        url,
+        timeout=timeout,
+        max_bytes=max_bytes,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+    )

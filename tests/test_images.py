@@ -4,6 +4,7 @@ import io
 import re
 import unittest
 from unittest.mock import patch
+from unittest.mock import sentinel
 
 import requests
 from docx import Document
@@ -13,8 +14,13 @@ from utils.images import (
     HAS_HEIF,
     HAS_PDF_RENDERER,
     MAX_WEB_IMAGE_BYTES,
+    SourceDownloadError,
+    _is_google_drive_source,
+    download_evidence_source,
+    download_image_source,
     download_url_evidence,
     download_url_image,
+    extract_drive_file_id,
     image_bytes_to_png,
     pdf_bytes_to_png_pages,
 )
@@ -43,6 +49,18 @@ class _Response:
 
     def close(self):
         self.closed = True
+
+
+class _ChunkedResponse(_Response):
+    def __init__(self, chunks, **kwargs):
+        super().__init__(b"", **kwargs)
+        self.chunks = list(chunks)
+        self.consumed_chunks = 0
+
+    def iter_content(self, chunk_size):
+        for chunk in self.chunks:
+            self.consumed_chunks += 1
+            yield chunk
 
 
 def _jpeg_bytes(size=(12, 8), *, orientation=None):
@@ -116,6 +134,7 @@ class ImageNormalizationTests(unittest.TestCase):
 
 class RemoteImageSourceTests(unittest.TestCase):
     URL = "https://progres-mitra.bpskaro.site/api/dokumen-mitra/62/ss-fasih"
+    BARE_DRIVE_ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz123"
 
     def test_extensionless_jpeg_is_downloaded_and_normalized(self):
         response = _Response(_jpeg_bytes(), content_type="image/jpeg")
@@ -190,8 +209,10 @@ class RemoteImageSourceTests(unittest.TestCase):
             with self.subTest(status=status):
                 response = _Response(b"error", status=status)
                 with patch("utils.images.requests.get", return_value=response) as get:
-                    with self.assertRaisesRegex(RuntimeError, re.escape(message)):
+                    with self.assertRaisesRegex(SourceDownloadError, re.escape(message)) as context:
                         download_url_image(self.URL)
+                self.assertEqual(context.exception.status_code, status)
+                self.assertEqual(context.exception.kind, "http")
                 self.assertEqual(get.call_count, 1)
 
     def test_http_500_retries_then_succeeds(self):
@@ -228,11 +249,49 @@ class RemoteImageSourceTests(unittest.TestCase):
                 download_url_image(self.URL)
         self.assertTrue(response.closed)
 
+    def test_stream_size_limit_stops_without_content_length(self):
+        response = _ChunkedResponse(
+            [b"123456", b"78", b"9", b"never-read"],
+            content_type="application/octet-stream",
+        )
+        with patch("utils.images.requests.get", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "Ukuran unduhan"):
+                download_image_source(self.URL, max_bytes=8)
+
+        self.assertEqual(response.consumed_chunks, 3)
+        self.assertTrue(response.closed)
+
     def test_corrupted_image_is_rejected_after_download(self):
         response = _Response(b"not an image", content_type="application/octet-stream")
         with patch("utils.images.requests.get", return_value=response):
             with self.assertRaisesRegex(RuntimeError, "bukan gambar yang didukung"):
                 download_url_image(self.URL)
+
+    def test_timeout_message_does_not_use_status_digits_from_url(self):
+        url = "https://example.test/api/404/image"
+        with patch(
+            "utils.images.requests.get",
+            side_effect=requests.Timeout("slow"),
+        ):
+            with self.assertRaises(SourceDownloadError) as context:
+                download_image_source(url, max_retries=1)
+
+        error = context.exception
+        self.assertIsNone(error.status_code)
+        self.assertEqual(error.kind, "timeout")
+        self.assertIn("Waktu tunggu habis", str(error))
+        self.assertIn(url, str(error))
+        self.assertNotIn("File tidak ditemukan", str(error))
+
+    def test_corrupt_response_with_status_digits_in_url_is_not_http_error(self):
+        url = "https://example.test/api/403/image"
+        response = _Response(b"not an image", content_type="application/octet-stream")
+        with patch("utils.images.requests.get", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "bukan gambar yang didukung") as context:
+                download_image_source(url)
+
+        self.assertIsNone(getattr(context.exception, "status_code", None))
+        self.assertNotIn("Akses ditolak", str(context.exception))
 
     def test_invalid_and_non_http_schemes_are_rejected(self):
         for url in ("", "file:///tmp/image.jpg", "ftp://example.test/image.jpg", "data:image/png;base64,AA="):
@@ -254,6 +313,96 @@ class RemoteImageSourceTests(unittest.TestCase):
         )
         self.assertIs(result, sentinel)
         sentinel[1].close()
+
+    def test_bare_drive_id_routes_to_drive_image_downloader(self):
+        with patch("utils.images.download_drive_image", return_value=sentinel.image) as drive:
+            result = download_image_source(self.BARE_DRIVE_ID)
+
+        drive.assert_called_once_with(
+            self.BARE_DRIVE_ID,
+            timeout=15,
+            max_retries=3,
+            retry_delay=0.5,
+            max_bytes=MAX_WEB_IMAGE_BYTES,
+        )
+        self.assertIs(result, sentinel.image)
+
+    def test_bare_drive_id_routes_to_drive_evidence_downloader(self):
+        with patch("utils.images.download_drive_evidence", return_value=sentinel.evidence) as drive:
+            result = download_evidence_source(self.BARE_DRIVE_ID)
+
+        drive.assert_called_once_with(
+            self.BARE_DRIVE_ID,
+            timeout=15,
+            max_retries=3,
+            retry_delay=0.5,
+            max_bytes=MAX_WEB_IMAGE_BYTES,
+        )
+        self.assertIs(result, sentinel.evidence)
+
+    def test_supported_drive_hosts_and_forms_are_confirmation_aware(self):
+        cases = (
+            "https://drive.google.com/file/d/FILE_ID/view",
+            "https://drive.google.com/open?id=FILE_ID",
+            "https://drive.google.com/uc?id=FILE_ID",
+            "https://docs.google.com/uc?id=FILE_ID",
+            "https://drive.usercontent.google.com/download?id=FILE_ID",
+        )
+        for url in cases:
+            with self.subTest(url=url):
+                self.assertTrue(_is_google_drive_source(url))
+                self.assertEqual(extract_drive_file_id(url), "FILE_ID")
+                with patch("utils.images.download_drive_image", return_value=sentinel.image) as drive:
+                    result = download_image_source(url)
+                drive.assert_called_once_with(
+                    "FILE_ID",
+                    timeout=15,
+                    max_retries=3,
+                    retry_delay=0.5,
+                    max_bytes=MAX_WEB_IMAGE_BYTES,
+                )
+                self.assertIs(result, sentinel.image)
+
+    def test_supported_drive_hosts_and_forms_route_evidence_downloader(self):
+        cases = (
+            "https://drive.google.com/file/d/FILE_ID/view",
+            "https://drive.google.com/open?id=FILE_ID",
+            "https://drive.google.com/uc?id=FILE_ID",
+            "https://docs.google.com/uc?id=FILE_ID",
+            "https://drive.usercontent.google.com/download?id=FILE_ID",
+        )
+        for url in cases:
+            with self.subTest(url=url):
+                with patch("utils.images.download_drive_evidence", return_value=sentinel.evidence) as drive:
+                    result = download_evidence_source(url)
+                drive.assert_called_once_with(
+                    "FILE_ID",
+                    timeout=15,
+                    max_retries=3,
+                    retry_delay=0.5,
+                    max_bytes=MAX_WEB_IMAGE_BYTES,
+                )
+                self.assertIs(result, sentinel.evidence)
+
+    def test_generic_url_with_id_query_stays_generic(self):
+        url = "https://example.com/download?id=123"
+        response = _Response(_png_bytes(), content_type="image/png")
+        with patch("utils.images.requests.get", return_value=response) as get, \
+                patch("utils.images.download_drive_image") as drive:
+            stream, image = download_image_source(url)
+
+        self.assertFalse(_is_google_drive_source(url))
+        self.assertIsNone(extract_drive_file_id(url))
+        get.assert_called_once_with(
+            url,
+            stream=True,
+            timeout=15,
+            verify=True,
+            allow_redirects=True,
+        )
+        drive.assert_not_called()
+        image.close()
+        stream.close()
 
     def test_exif_orientation_is_applied_for_remote_image(self):
         response = _Response(_jpeg_bytes((2, 3), orientation=6))

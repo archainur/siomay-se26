@@ -36,6 +36,7 @@ from utils.images import (
     HAS_HEIF,
     HAS_PIL,
     download_image_source as _universal_image_downloader,
+    extract_drive_file_id as _extract_file_id,
 )
 
 
@@ -70,25 +71,6 @@ IMAGE_BOX_WIDTH_CM  = COL_WIDTH_CM - CELL_PADDING_CM            # 8.5
 IMAGE_BOX_HEIGHT_CM = max(ROW_HEIGHT_CM - TEXT_ALLOWANCE_CM, 3.0)
 
 # ── Kompatibilitas helper lama dan downloader universal ─────────────────────
-
-def _extract_file_id(link: str):
-    """Ekstrak File ID untuk kompatibilitas helper lama."""
-    if not link or not str(link).strip():
-        return None
-    link = str(link).strip()
-    # /file/d/FILE_ID/view
-    m = re.search(r"/file/d/([a-zA-Z0-9_-]+)", link)
-    if m:
-        return m.group(1)
-    # open?id=FILE_ID  atau  uc?id=FILE_ID
-    m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", link)
-    if m:
-        return m.group(1)
-    # File ID polos
-    if re.fullmatch(r"[a-zA-Z0-9_-]{10,}", link):
-        return link
-    return None
-
 
 _default_image_downloader = _universal_image_downloader
 _download_drive_image = _default_image_downloader

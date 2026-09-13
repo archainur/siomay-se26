@@ -12,7 +12,7 @@ Semua perubahan penting pada proyek SIOMAY didokumentasikan di berkas ini. Forma
 - **Ketahanan Unduhan**: Downloader HTTP(S) menerapkan TLS verification, timeout, batas 25 MB, retry konservatif untuk kegagalan sementara, serta penolakan HTML/response kosong.
 
 ### Dipertahankan
-- **Kompatibilitas Google Drive**: Tautan Google Drive lama tetap menggunakan mekanisme konfirmasi/download yang sudah ada dan tetap dapat dipakai pada kolom yang sama.
+- **Kompatibilitas Google Drive**: Tautan Google Drive lama dan bare file ID tetap menggunakan mekanisme konfirmasi/download yang sudah ada dan tetap dapat dipakai pada kolom yang sama.
 
 ### Keandalan dan Pengujian
 - Menambahkan mock HTTP tests untuk response gambar, PDF, redirect, Content-Type menyesatkan, error HTTP, timeout, retry, batas ukuran, URL tidak valid, korupsi, dan EXIF orientation.
