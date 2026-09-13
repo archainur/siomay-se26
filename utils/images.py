@@ -127,8 +127,11 @@ def _is_bare_drive_file_id(value: str) -> bool:
 
 
 def _is_google_drive_host(hostname: str | None) -> bool:
-    """Return whether *hostname* is one of the explicitly supported hosts."""
-    return (hostname or "").lower().rstrip(".") in _GOOGLE_DRIVE_HOSTS
+    """Return whether *hostname* is a supported Google-owned Drive host."""
+    normalized = (hostname or "").lower().rstrip(".")
+    return normalized in _GOOGLE_DRIVE_HOSTS or normalized.endswith(
+        ".drive.google.com"
+    )
 
 
 def _is_google_drive_source(value: str) -> bool:

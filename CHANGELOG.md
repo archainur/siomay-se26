@@ -16,7 +16,7 @@ Semua perubahan penting pada proyek SIOMAY didokumentasikan di berkas ini. Forma
 
 ### Keandalan dan Pengujian
 - Menambahkan mock HTTP tests untuk response gambar, PDF, redirect, Content-Type menyesatkan, error HTTP, timeout, retry, batas ukuran, URL tidak valid, korupsi, dan EXIF orientation.
-- Menambahkan regresi generator BAPP T1/T2, BAST, Bukti Terima, serta placeholder kustom untuk URL self-hosted tanpa ekstensi.
+- Menambahkan regresi generator BAPP T1/T2, BAST, Bukti Terima, serta placeholder kustom untuk URL self-hosted tanpa ekstensi dan bare Google Drive file ID.
 
 ---
 

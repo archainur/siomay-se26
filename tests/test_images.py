@@ -343,6 +343,7 @@ class RemoteImageSourceTests(unittest.TestCase):
     def test_supported_drive_hosts_and_forms_are_confirmation_aware(self):
         cases = (
             "https://drive.google.com/file/d/FILE_ID/view",
+            "https://sub.drive.google.com/file/d/FILE_ID/view",
             "https://drive.google.com/open?id=FILE_ID",
             "https://drive.google.com/uc?id=FILE_ID",
             "https://docs.google.com/uc?id=FILE_ID",
@@ -366,6 +367,7 @@ class RemoteImageSourceTests(unittest.TestCase):
     def test_supported_drive_hosts_and_forms_route_evidence_downloader(self):
         cases = (
             "https://drive.google.com/file/d/FILE_ID/view",
+            "https://sub.drive.google.com/file/d/FILE_ID/view",
             "https://drive.google.com/open?id=FILE_ID",
             "https://drive.google.com/uc?id=FILE_ID",
             "https://docs.google.com/uc?id=FILE_ID",
