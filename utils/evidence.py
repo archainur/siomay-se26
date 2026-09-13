@@ -1,6 +1,7 @@
-"""Shared DOCX layout engine for image and PDF evidence from Google Drive."""
+"""Shared DOCX layout engine for image and PDF evidence sources."""
 
 import io
+import re
 
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
@@ -29,6 +30,75 @@ DEDICATED_MAX_HEIGHT_IN = 4.0
 DEDICATED_TITLE_SPACE_IN = 0.75
 DEDICATED_FIRST_UNIT_EXTRA_SPACE_IN = 0.25
 EMU_PER_INCH = 914400
+_HTTP_SCHEME_RE = re.compile(r"https?://", re.IGNORECASE)
+_HTTP_SOURCE_START_RE = re.compile(r"\s*https?://", re.IGNORECASE)
+_HTTP_SOURCE_EXPLICIT_BOUNDARY_RE = re.compile(
+    r"\s+https?://", re.IGNORECASE
+)
+_BARE_DRIVE_SOURCE_START_RE = re.compile(
+    r"\s+[A-Za-z0-9_-]{10,}(?=\s*(?:,|$))"
+)
+
+
+def _split_http_source_line(text):
+    """Split one source line while retaining ambiguous URL commas."""
+    parts = []
+    start = 0
+    cursor = 0
+    while True:
+        comma = text.find(",", cursor)
+        if comma < 0:
+            break
+
+        remainder = text[comma + 1:]
+        prefix = text[start:comma]
+        http_start = _HTTP_SOURCE_START_RE.match(remainder)
+        if http_start:
+            explicit_boundary = _HTTP_SOURCE_EXPLICIT_BOUNDARY_RE.match(
+                remainder
+            )
+            nested_http = len(_HTTP_SCHEME_RE.findall(prefix)) > 1
+            if explicit_boundary or not nested_http:
+                parts.append(prefix)
+                start = comma + 1
+                cursor = start
+                continue
+
+        if _BARE_DRIVE_SOURCE_START_RE.match(remainder):
+            parts.append(prefix)
+            start = comma + 1
+            cursor = start
+            continue
+
+        cursor = comma + 1
+
+    parts.append(text[start:])
+    return parts
+
+
+def split_source_values(value):
+    """Split legacy source lists without truncating commas inside HTTP URLs.
+
+    Existing workbooks separate multiple sources with commas. A comma inside
+    a direct URL is preserved unless it is followed by the start of another
+    HTTP(S) source or a bare Drive ID after an explicit whitespace boundary.
+    A no-space HTTP separator is accepted only when the current URL does not
+    already contain a nested absolute HTTP(S) URL. Bare-ID-only lists retain
+    the legacy comma behavior.
+    """
+    text = str(value or "")
+    if not text.strip():
+        return []
+
+    parts = []
+    for line in re.split(r"[\r\n]+", text):
+        if not line.strip():
+            continue
+        if _HTTP_SCHEME_RE.search(line):
+            parts.extend(_split_http_source_line(line))
+        else:
+            parts.extend(line.split(","))
+    return [part.strip() for part in parts if part.strip()]
 
 
 def _fit_box(img_w, img_h, box_w, box_h):
@@ -240,10 +310,31 @@ def insert_evidence_items(doc, target, items, image_layout,
     return len(items)
 
 
-def insert_evidence(doc, links_str, placeholder, image_layout, extract_file_id,
-                    replace_text, evidence_downloader,
-                    image_orientation=IMAGE_ORIENTATION_PORTRAIT):
-    """Insert ordered images/PDF pages; PDF pages are always dedicated pages."""
+def insert_evidence(
+    doc,
+    links_str,
+    placeholder,
+    image_layout,
+    extract_file_id=None,
+    replace_text=None,
+    evidence_downloader=None,
+    image_orientation=IMAGE_ORIENTATION_PORTRAIT,
+    *,
+    source_downloader=None,
+):
+    """Insert ordered images/PDF pages; PDF pages are always dedicated pages.
+
+    ``source_downloader`` is the preferred API and receives each complete
+    HTTP(S) source URL. The older ``extract_file_id`` + ``evidence_downloader``
+    contract remains available for callers outside the repository so existing
+    Google Drive integrations do not break during the migration.
+    """
+    if replace_text is None:
+        raise ValueError("Fungsi penggantian placeholder wajib tersedia.")
+    if source_downloader is None and (
+        extract_file_id is None or evidence_downloader is None
+    ):
+        raise ValueError("Downloader bukti dukung wajib tersedia.")
     if image_layout not in IMAGE_LAYOUTS:
         raise ValueError(f"Mode tata letak gambar tidak dikenal: {image_layout}")
     if image_orientation not in IMAGE_ORIENTATIONS:
@@ -259,23 +350,29 @@ def insert_evidence(doc, links_str, placeholder, image_layout, extract_file_id,
 
     warnings = []
     items = []
-    for link in (value.strip() for value in str(links_str).split(",")):
+    for link in split_source_values(links_str):
         if not link:
             continue
-        file_id = extract_file_id(link)
-        if not file_id:
-            warnings.append("Tautan tidak dikenali: " + link)
-            continue
+        identifier = link
         try:
-            items.extend(evidence_downloader(file_id))
+            if source_downloader is not None:
+                items.extend(source_downloader(link))
+            else:
+                file_id = extract_file_id(link)
+                identifier = file_id
+                if not file_id:
+                    warnings.append("Tautan tidak dikenali: " + link)
+                    continue
+                items.extend(evidence_downloader(file_id))
         except Exception as exc:
             message = str(exc)
-            if "403" in message or "forbidden" in message.lower():
-                warnings.append(f"Akses ditolak (403) untuk {file_id}")
-            elif "404" in message:
-                warnings.append(f"File {file_id} tidak ditemukan")
+            status_code = getattr(exc, "status_code", None)
+            if status_code == 403:
+                warnings.append(f"Akses ditolak (403): {identifier}")
+            elif status_code == 404:
+                warnings.append(f"File tidak ditemukan (404): {identifier}")
             else:
-                warnings.append(f"Gagal memuat {file_id}: {message}")
+                warnings.append(f"Gagal memuat {identifier}: {message}")
 
     if not items:
         return 0, warnings

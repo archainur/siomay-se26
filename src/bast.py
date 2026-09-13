@@ -29,12 +29,12 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-# Reuse evidence layout and placeholder helpers from BAPP T2 PPL
+# Reuse shared evidence layout and placeholder helpers from BAPP T2 PPL
 from src.bapp_ppl_t2 import (
     IMAGE_LAYOUT_GRID,
     IMAGE_ORIENTATION_PORTRAIT,
     replace_text_preserving_runs,
-    insert_gdrive_images,
+    insert_evidence_images,
     _slug,
 )
 from src.document_generator import (
@@ -42,6 +42,9 @@ from src.document_generator import (
     row_placeholder_replacements,
     validate_custom_columns,
 )
+
+# Backward-compatible export for integrations using the old helper name.
+insert_gdrive_images = insert_evidence_images
 
 # -- Skema sheet wajib ------------------------------------------------
 REQUIRED_SCHEMA = {
@@ -433,7 +436,7 @@ def _generate_one_doc(row, kind, df_tugas, df_mitra, kec_map,
         image_orientation=image_orientation,
     )
     replacements = row_placeholder_replacements(row)
-    # The evidence column is consumed by insert_gdrive_images, not rendered as
+    # The evidence column is consumed by insert_evidence_images, not rendered as
     # its source URL in the DOCX.
     replacements.pop(BUKTI_PLACEHOLDER, None)
     replacements.update({
@@ -461,7 +464,7 @@ def _generate_one_doc(row, kind, df_tugas, df_mitra, kec_map,
 
     # Selalu proses placeholder, termasuk saat tautan kosong, agar token yang
     # terpecah menjadi beberapa run Word juga dibersihkan.
-    n_img, img_warnings = insert_gdrive_images(
+    n_img, img_warnings = insert_evidence_images(
         doc, bukti_link, placeholder=BUKTI_PLACEHOLDER,
         image_layout=image_layout,
         image_orientation=image_orientation,

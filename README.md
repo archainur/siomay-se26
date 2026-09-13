@@ -32,9 +32,9 @@
 - Validasi template Word sebelum generate, termasuk placeholder yang hilang atau tidak dikenal.
 - Penggantian placeholder `{{nama_kolom}}` pada paragraf, tabel, header, dan footer, termasuk placeholder yang terpecah menjadi beberapa *run* Word.
 - Placeholder kustom tanpa batas pada template Word; kolom pasangannya ditambahkan otomatis ke template Excel yang diunduh.
-- Nilai placeholder kustom dapat berupa teks, tautan gambar, atau tautan PDF dari Google Drive; gambar juga dapat berasal dari URL HTTP(S) langsung.
+- Nilai placeholder kustom dapat berupa teks atau tautan HTTP(S) yang mengembalikan gambar/bukti; Google Drive tetap didukung dan URL self-hosted dapat berasal dari layanan penyimpanan atau endpoint aplikasi.
 - Pembuatan DOCX massal dengan log proses, progres, timer aktif, serta ringkasan durasi.
-- Pengunduhan dan penyisipan bukti dukung dari Google Drive dalam format JPEG, PNG, HEIC, HEIF, atau PDF.
+- Pengunduhan dan penyisipan bukti dukung dari Google Drive maupun URL HTTP(S) langsung dalam format JPEG, PNG, HEIC, HEIF, atau PDF pada alur yang mendukung PDF.
 - Koreksi orientasi foto berdasarkan metadata EXIF dan konversi HEIC/HEIF otomatis agar dapat dimasukkan ke DOCX.
 - Konversi seluruh DOCX ke PDF secara batch melalui LibreOffice *headless* yang dibundel dalam rilis Windows.
 - Estimasi waktu maksimum dan sisa waktu selama konversi PDF berdasarkan jenis dan jumlah dokumen.
@@ -47,8 +47,8 @@
 |---|---|---|
 | Lampiran SPK | Lampiran SPK PPL | Dokumen massal untuk Petugas Lapangan |
 | Lampiran SPK | Lampiran SPK PML | Dokumen massal untuk Pemeriksa Lapangan |
-| BAPP Termin 1 | BAPP PPL Termin 1 | Mendukung bukti dukung Google Drive dalam grid adaptif |
-| BAPP Termin 1 | BAPP PML Termin 1 | Mendukung bukti dukung Google Drive dalam grid adaptif |
+| BAPP Termin 1 | BAPP PPL Termin 1 | Mendukung bukti dukung Google Drive dan URL HTTP(S) dalam grid adaptif |
+| BAPP Termin 1 | BAPP PML Termin 1 | Mendukung bukti dukung Google Drive dan URL HTTP(S) dalam grid adaptif |
 | SPP Termin 1 | SPP PPL Termin 1 | Alur dan format input khusus Termin 1 |
 | SPP Termin 1 | SPP PML Termin 1 | Alur dan format input khusus Termin 1 |
 | BAPP Termin 2 | BAPP PPL Termin 2 | Pilihan grid adaptif atau satu gambar per halaman |
@@ -70,7 +70,7 @@ Nomor urut BAPP Termin 2 dan BAST yang bersifat numerik diformat menjadi tiga di
 | Ruang penyimpanan | Sediakan ruang untuk aplikasi, LibreOffice terbundel, file sementara, dan hasil dokumen |
 | Microsoft Excel | Disarankan untuk mengisi dan memeriksa berkas input `.xlsx` |
 | Microsoft Word desktop | Diperlukan bila ingin menyunting template DOCX; tidak diperlukan untuk konversi PDF |
-| Koneksi internet | Diperlukan untuk bukti dukung Google Drive dan pemeriksaan pembaruan |
+| Koneksi internet | Diperlukan untuk bukti dukung dari URL HTTP(S) dan pemeriksaan pembaruan |
 | Python | Tidak perlu diinstal oleh pengguna akhir |
 
 > Rilis portable menyertakan LibreOffice. Folder `LibreOffice` harus tetap berada di dalam folder aplikasi, di samping `SIOMAY.exe`, agar pilihan keluaran PDF tersedia.
@@ -136,17 +136,23 @@ Pilih format keluaran yang tersedia, tentukan lokasi penyimpanan, lalu tunggu pr
 
 ## Gambar dan Bukti Dukung
 
-Alur BAPP, BAST, dan Bukti Terima dapat menggunakan tautan Google Drive untuk mengambil foto atau tangkapan layar. Placeholder kustom pada BAPP, SPP, dan BAST juga dapat diisi dengan URL HTTP(S) gambar langsung atau URL Google Drive berisi gambar/PDF. Agar bukti dapat diunduh:
+SIOMAY mendukung bukti dukung dari tautan Google Drive publik maupun URL HTTP(S) langsung, termasuk layanan penyimpanan self-hosted/OpenCloud atau endpoint aplikasi/proxy yang mengembalikan file gambar. Contoh URL langsung:
+
+`https://example.go.id/api/dokumen/123/gambar`
+
+Ekstensi file pada URL tidak wajib. Server harus mengembalikan byte gambar yang dapat dibaca Pillow; penentuan tipe tidak hanya bergantung pada nama URL atau `Content-Type`. Placeholder kustom pada BAPP, SPP, dan BAST menggunakan core downloader yang sama. Agar bukti dapat diunduh:
 
 - Atur akses file menjadi **Anyone with the link / Siapa saja yang memiliki tautan**.
 - Jika file berasal dari folder unggahan Google Forms, pastikan folder tersebut juga dapat diakses melalui tautan.
-- Gunakan tautan file Google Drive yang valid; beberapa tautan dapat dipisahkan dengan koma pada kolom yang mendukung banyak gambar.
-- Format JPEG, PNG, HEIC, HEIF, dan PDF didukung pada BAPP Termin 2 dan BAST.
+- Gunakan tautan file Google Drive yang valid, bare file ID Google Drive lama, atau URL HTTP(S) yang dapat diakses oleh komputer yang menjalankan SIOMAY; beberapa tautan dapat dipisahkan dengan koma pada kolom yang mendukung banyak gambar.
+- Format Drive yang didukung mencakup `/file/d/FILE_ID/view`, `/open?id=FILE_ID`, `/uc?id=FILE_ID`, `docs.google.com/uc?id=FILE_ID`, dan `drive.usercontent.google.com/download?id=FILE_ID`.
+- Format JPEG, PNG, HEIC, dan HEIF didukung pada alur gambar. PDF didukung pada BAPP Termin 2, BAST, dan placeholder kustom yang memakai evidence layout; BAPP Termin 1 dan Bukti Terima tetap mengharapkan satu atau beberapa gambar sesuai layout masing-masing.
   Setiap halaman PDF dirender dan disisipkan sebagai halaman khusus. Orientasi
   EXIF pada gambar diterapkan otomatis.
-- Pada kolom placeholder kustom, gunakan satu URL lengkap per sel. PDF kustom didukung melalui tautan Google Drive, sedangkan URL web selain Google Drive harus mengarah ke gambar yang valid.
+- Pada kolom placeholder kustom, gunakan satu URL lengkap per sel. URL tanpa ekstensi tetap dapat digunakan selama responsnya merupakan media yang didukung.
+- Endpoint yang membutuhkan login, cookie, browser session, atau token pribadi tidak otomatis dapat digunakan. SIOMAY tidak menambahkan autentikasi OpenCloud secara otomatis.
 - Jika nilai kustom bukan URL, nilainya dimasukkan sebagai teks. Jika pengunduhan atau validasi URL gagal, URL asli tetap dimasukkan sebagai teks agar informasi tidak hilang.
-- Respons HTML, file kosong, dan gambar rusak/tidak dikenal dilaporkan sebagai peringatan tanpa harus menggagalkan seluruh batch.
+- TLS certificate verification tetap aktif, timeout dan batas unduhan 25 MB diterapkan, serta kegagalan sementara dicoba ulang secara terbatas. Respons HTML, file kosong, dan gambar rusak/tidak dikenal dilaporkan sebagai peringatan tanpa harus menggagalkan seluruh batch.
 
 Perhatikan bahwa penggunaan tautan yang dapat diakses siapa saja memiliki implikasi privasi. Batasi isi gambar pada data yang memang diperlukan, dan cabut akses tautan setelah proses selesai bila kebijakan kerja mengharuskannya.
 
@@ -193,9 +199,9 @@ Unduh kembali template untuk dokumen terpilih. Pertahankan semua placeholder baw
 
 Gunakan template Excel yang diunduh setelah memilih dokumen. Jangan mengubah nama sheet/kolom, pastikan kolom wajib tersedia, dan gunakan format untuk termin serta peran yang benar.
 
-### Gambar Google Drive tidak muncul
+### Gambar atau bukti dukung tidak muncul
 
-Periksa akses **Siapa saja yang memiliki tautan**, validitas URL, koneksi internet, dan isi file. Halaman login/HTML bukan file gambar dan akan ditolak.
+Periksa akses **Siapa saja yang memiliki tautan** untuk Google Drive, validitas URL, koneksi internet, dan isi file. URL HTTP(S) harus dapat dibuka oleh komputer yang menjalankan SIOMAY dan endpoint harus mengembalikan file, bukan halaman login/HTML. URL tidak perlu memiliki ekstensi `.jpg`, `.jpeg`, atau `.png`.
 
 
 ### 💬 Feedback & Laporan Masalah

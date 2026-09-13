@@ -4,6 +4,22 @@ Semua perubahan penting pada proyek SIOMAY didokumentasikan di berkas ini. Forma
 
 ---
 
+## [Unreleased]
+
+### Ditambahkan
+- **Sumber Bukti Dukung Universal**: BAPP Termin 1, BAPP Termin 2, BAST, Bukti Terima, dan placeholder kustom kini dapat mengambil gambar dari URL HTTP(S) langsung, termasuk endpoint self-hosted/OpenCloud-compatible.
+- **URL Tanpa Ekstensi**: Resource gambar ditentukan dari byte yang berhasil didekode, sehingga URL API tanpa ekstensi tetap didukung.
+- **Ketahanan Unduhan**: Downloader HTTP(S) menerapkan TLS verification, timeout, batas 25 MB, retry konservatif untuk kegagalan sementara, serta penolakan HTML/response kosong.
+
+### Dipertahankan
+- **Kompatibilitas Google Drive**: Tautan Google Drive lama dan bare file ID tetap menggunakan mekanisme konfirmasi/download yang sudah ada dan tetap dapat dipakai pada kolom yang sama.
+
+### Keandalan dan Pengujian
+- Menambahkan mock HTTP tests untuk response gambar, PDF, redirect, Content-Type menyesatkan, error HTTP, timeout, retry, batas ukuran, URL tidak valid, korupsi, dan EXIF orientation.
+- Menambahkan regresi generator BAPP T1/T2, BAST, Bukti Terima, serta placeholder kustom untuk URL self-hosted tanpa ekstensi dan bare Google Drive file ID.
+
+---
+
 ## [v2026.1.8] - 2026-09-05
 
 ### Ditambahkan

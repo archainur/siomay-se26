@@ -5,7 +5,7 @@ Port dari notebook 'generator/Generator_BAPP_PML_grid_bukti_dukung (1).ipynb'.
 
 Mengisi template BAPP (Berita Acara Pemeriksaan Hasil Pekerjaan) Termin I
 untuk Pemeriksa Lapangan (PML) berdasarkan data Excel, menyisipkan
-screenshot bukti dukung dari tautan Google Drive sebagai grid adaptif.
+ screenshot bukti dukung dari Google Drive atau URL HTTP(S) sebagai grid adaptif.
 
 Input Excel:
   Sheet 'input': nik, nama_lengkap, no_spk, no_urut_bapp_t1,
@@ -30,10 +30,12 @@ from src.document_generator import (
     validate_custom_columns,
 )
 from docx.shared import Inches, Pt
+from utils.evidence import split_source_values
 from utils.images import (
     HAS_HEIF,
     HAS_PIL,
-    download_drive_image as _download_drive_image,
+    download_image_source as _universal_image_downloader,
+    extract_drive_file_id as _extract_file_id,
 )
 
 
@@ -160,7 +162,7 @@ def generate_input_template(file_path: str):
         "no_spk": "B-001/SPK-PML-SE2026/6304/PL.200/2026",
         "no_urut_bapp_t1": "1",
         "jml_sls_t1": "12",
-        "bukti_dukung_bapp_t1": "https://drive.google.com/open?id=XXXXX",
+        "bukti_dukung_bapp_t1": "https://example.go.id/api/dokumen/123/gambar",
     }
     for col_idx, col_name in enumerate(REQUIRED_COLUMNS, 1):
         cell = ws.cell(row=2, column=col_idx, value=sample.get(col_name, ""))
@@ -264,23 +266,6 @@ def replace_text_preserving_runs(doc: Document, replacements: dict) -> None:
                 _process_table(table)
 
 
-def _extract_file_id(link: str):
-    """Ambil file ID dari tautan Google Drive."""
-    link = link.strip()
-    if not link:
-        return None
-    m = re.search(r"[?&]id=([-\w]+)", link)
-    if m:
-        return m.group(1)
-    m = re.search(r"/d/([-\w]+)", link)
-    if m:
-        return m.group(1)
-    m = re.search(r"[-\w]{25,}", link)
-    if m:
-        return m.group(0)
-    return None
-
-
 def _remove_table_borders(table):
     tbl = table._tbl
     tblPr = tbl.tblPr
@@ -315,8 +300,22 @@ def _fit_box(img_w: int, img_h: int, box_w: float, box_h: float):
     return target_w, target_h
 
 
-def insert_gdrive_images(doc: Document, links_str: str,
-                         placeholder: str = None):
+_default_image_downloader = _universal_image_downloader
+_download_drive_image = _default_image_downloader
+
+
+def _download_image_source(url: str):
+    """Download one complete image URL through the shared resolver."""
+    # Retain the old injectable module name for callers/tests that patched the
+    # former Google Drive-only downloader. Legacy patches receive a file ID.
+    file_id = _extract_file_id(url)
+    if file_id and _download_drive_image is not _default_image_downloader:
+        return _download_drive_image(file_id)
+    return _download_drive_image(url)
+
+
+def insert_evidence_images(doc: Document, links_str: str,
+                           placeholder: str = None):
     """
     Sisipkan 1-5 screenshot bukti dukung sebagai GRID di lokasi
     paragraf yang mengandung {{bukti_dukung}}.
@@ -350,28 +349,26 @@ def insert_gdrive_images(doc: Document, links_str: str,
     if not links_str or not str(links_str).strip():
         return 0, []
 
-    links = [l.strip() for l in str(links_str).split(",") if l.strip()][:5]
-    if len(str(links_str).split(",")) > 5:
+    all_links = split_source_values(links_str)
+    links = all_links[:5]
+    if len(all_links) > 5:
         warnings_list.append("Hanya 5 tautan pertama yang dipakai")
 
     # Unduh semua gambar
     images = []
     for link in links:
-        file_id = _extract_file_id(link)
-        if not file_id:
-            warnings_list.append("Tautan tidak dikenali: " + link)
-            continue
         try:
-            fh, img = _download_drive_image(file_id)
+            fh, img = _download_image_source(link)
             images.append((fh, img))
         except Exception as e:
             msg = str(e)
-            if "403" in msg or "forbidden" in msg.lower():
-                warnings_list.append(f"Akses ditolak (403) untuk {file_id}")
-            elif "404" in msg:
-                warnings_list.append(f"File {file_id} tidak ditemukan")
+            status_code = getattr(e, "status_code", None)
+            if status_code == 403:
+                warnings_list.append(f"Akses ditolak (403): {link}")
+            elif status_code == 404:
+                warnings_list.append(f"File tidak ditemukan (404): {link}")
             else:
-                warnings_list.append(f"Gagal memuat {file_id}: {msg}")
+                warnings_list.append(f"Gagal memuat {link}: {msg}")
 
     n = len(images)
     if n == 0:
@@ -383,42 +380,53 @@ def insert_gdrive_images(doc: Document, links_str: str,
     anchor = target_p._p
     img_idx = 0
 
-    for cols in layout:
-        col_w = (GRID_MAX_WIDTH_IN - GRID_GAP_IN * (cols - 1)) / cols
-        row_table = doc.add_table(rows=1, cols=cols)
-        row_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        row_table.autofit = False
-        _remove_table_borders(row_table)
+    try:
+        for cols in layout:
+            col_w = (GRID_MAX_WIDTH_IN - GRID_GAP_IN * (cols - 1)) / cols
+            row_table = doc.add_table(rows=1, cols=cols)
+            row_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            row_table.autofit = False
+            _remove_table_borders(row_table)
 
-        for c in range(cols):
-            cell = row_table.rows[0].cells[c]
-            _set_cell_width(cell, col_w)
-            tcPr = cell._tc.get_or_add_tcPr()
-            tcMar = OxmlElement("w:tcMar")
-            for side in ("top", "left", "bottom", "right"):
-                node = OxmlElement(f"w:{side}")
-                node.set(qn("w:w"), "60")
-                node.set(qn("w:type"), "dxa")
-                tcMar.append(node)
-            tcPr.append(tcMar)
-            cell_p = cell.paragraphs[0]
-            cell_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            cell_p.paragraph_format.space_before = Pt(0)
-            cell_p.paragraph_format.space_after = Pt(0)
-            if img_idx < n:
-                fh, img = images[img_idx]
-                img_w, img_h = img.size
-                target_w, target_h = _fit_box(img_w, img_h, col_w, row_h)
-                fh.seek(0)
-                run = cell_p.add_run()
-                run.add_picture(fh, width=Inches(target_w),
-                                height=Inches(target_h))
-                img_idx += 1
+            for c in range(cols):
+                cell = row_table.rows[0].cells[c]
+                _set_cell_width(cell, col_w)
+                tcPr = cell._tc.get_or_add_tcPr()
+                tcMar = OxmlElement("w:tcMar")
+                for side in ("top", "left", "bottom", "right"):
+                    node = OxmlElement(f"w:{side}")
+                    node.set(qn("w:w"), "60")
+                    node.set(qn("w:type"), "dxa")
+                    tcMar.append(node)
+                tcPr.append(tcMar)
+                cell_p = cell.paragraphs[0]
+                cell_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                cell_p.paragraph_format.space_before = Pt(0)
+                cell_p.paragraph_format.space_after = Pt(0)
+                if img_idx < n:
+                    fh, img = images[img_idx]
+                    img_w, img_h = img.size
+                    target_w, target_h = _fit_box(img_w, img_h, col_w, row_h)
+                    fh.seek(0)
+                    run = cell_p.add_run()
+                    run.add_picture(fh, width=Inches(target_w),
+                                    height=Inches(target_h))
+                    img_idx += 1
 
-        anchor.addnext(row_table._tbl)
-        anchor = row_table._tbl
+            anchor.addnext(row_table._tbl)
+            anchor = row_table._tbl
+    finally:
+        for fh, img in images:
+            try:
+                img.close()
+            finally:
+                fh.close()
 
     return img_idx, warnings_list
+
+
+# Backward-compatible name retained for existing callers and templates.
+insert_gdrive_images = insert_evidence_images
 
 
 def _slug(name: str) -> str:
@@ -477,7 +485,7 @@ def iter_generate(dfs: dict, template_path: str, out_dir: str):
 
         # Build replacements from PLACEHOLDER_MAP
         replacements = row_placeholder_replacements(row)
-        # Preserve the evidence token until insert_gdrive_images processes it.
+        # Preserve the evidence token until insert_evidence_images processes it.
         replacements.pop(BUKTI_PLACEHOLDER, None)
         for ph_key, input_col in PLACEHOLDER_MAP.items():
             val = _norm(row.get(input_col, ""))
@@ -486,7 +494,7 @@ def iter_generate(dfs: dict, template_path: str, out_dir: str):
         replace_text_preserving_runs(doc, replacements)
 
         # Always process the evidence token so an empty link removes it too.
-        n_img, img_warnings = insert_gdrive_images(doc, link_gd)
+        n_img, img_warnings = insert_evidence_images(doc, link_gd)
         if n_img:
             yield {"t": "log", "level": "INFO",
                    "msg": f"   {n_img} screenshot disisipkan"}

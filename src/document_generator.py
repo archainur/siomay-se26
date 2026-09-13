@@ -207,16 +207,17 @@ def insert_custom_url_images(doc, row, builtin_fields=(), *,
 
     Only columns outside *builtin_fields* are custom. A custom value is fetched
     only when its exact placeholder still exists and the complete value is an
-    HTTP(S) URL. Google Drive values support images and PDFs; other web URLs are
-    validated as images. Each custom placeholder acts as an evidence anchor and
-    follows the same selected layout/orientation as built-in evidence. If the
-    download or validation fails, the token remains for URL-as-text fallback.
+    HTTP(S) URL. Google Drive and other HTTP(S) sources are validated by the
+    shared image/evidence downloader. Each custom placeholder acts as an
+    evidence anchor and follows the same selected layout/orientation as
+    built-in evidence. If the download or validation fails, the token remains
+    for URL-as-text fallback.
     """
     if row is None:
         return set()
     from utils.evidence import insert_evidence_items
     from utils.images import (
-        download_url_evidence,
+        download_evidence_source,
     )
 
     builtin = {str(field) for field in builtin_fields}
@@ -233,7 +234,7 @@ def insert_custom_url_images(doc, row, builtin_fields=(), *,
             continue
         try:
             if downloader is None:
-                items = download_url_evidence(value)
+                items = download_evidence_source(value)
             else:
                 # Preserve the injectable legacy downloader contract used by
                 # callers/tests: ``(PNG stream, open PIL image)``.
