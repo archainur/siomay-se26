@@ -107,10 +107,9 @@ def extract_drive_file_id(link: str) -> str | None:
         return None
 
     parsed = urlparse(value)
-    for pattern in (r"^/file/d/([^/?#]+)", r"^/d/([^/?#]+)"):
-        match = re.search(pattern, parsed.path)
-        if match and _is_drive_file_id(match.group(1)):
-            return match.group(1)
+    match = re.search(r"/d/([^/?#]+)", parsed.path)
+    if match and _is_drive_file_id(match.group(1)):
+        return match.group(1)
 
     query_id = parse_qs(parsed.query).get("id", [None])[0]
     if query_id and _is_drive_file_id(query_id):
