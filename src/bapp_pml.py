@@ -30,6 +30,7 @@ from src.document_generator import (
     validate_custom_columns,
 )
 from docx.shared import Inches, Pt
+from utils.evidence import split_source_values
 from utils.images import (
     HAS_HEIF,
     HAS_PIL,
@@ -348,8 +349,9 @@ def insert_evidence_images(doc: Document, links_str: str,
     if not links_str or not str(links_str).strip():
         return 0, []
 
-    links = [l.strip() for l in str(links_str).split(",") if l.strip()][:5]
-    if len(str(links_str).split(",")) > 5:
+    all_links = split_source_values(links_str)
+    links = all_links[:5]
+    if len(all_links) > 5:
         warnings_list.append("Hanya 5 tautan pertama yang dipakai")
 
     # Unduh semua gambar

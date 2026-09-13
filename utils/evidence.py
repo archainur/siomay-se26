@@ -1,6 +1,7 @@
 """Shared DOCX layout engine for image and PDF evidence sources."""
 
 import io
+import re
 
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
@@ -29,6 +30,30 @@ DEDICATED_MAX_HEIGHT_IN = 4.0
 DEDICATED_TITLE_SPACE_IN = 0.75
 DEDICATED_FIRST_UNIT_EXTRA_SPACE_IN = 0.25
 EMU_PER_INCH = 914400
+_HTTP_SOURCE_SEPARATOR_RE = re.compile(r",(?=\s*https?://)", re.IGNORECASE)
+
+
+def split_source_values(value):
+    """Split legacy source lists without truncating commas inside HTTP URLs.
+
+    Existing workbooks separate multiple sources with commas. A comma inside
+    a direct URL is preserved unless it is followed by the start of another
+    HTTP(S) source; bare-ID-only lists retain the legacy comma behavior.
+    """
+    text = str(value or "")
+    if not text.strip():
+        return []
+
+    if not re.search(r"https?://", text, re.IGNORECASE):
+        parts = text.split(",")
+    else:
+        parts = []
+        for segment in _HTTP_SOURCE_SEPARATOR_RE.split(text):
+            if re.match(r"\s*https?://", segment, re.IGNORECASE):
+                parts.append(segment)
+            else:
+                parts.extend(segment.split(","))
+    return [part.strip() for part in parts if part.strip()]
 
 
 def _fit_box(img_w, img_h, box_w, box_h):
@@ -280,7 +305,7 @@ def insert_evidence(
 
     warnings = []
     items = []
-    for link in (value.strip() for value in str(links_str).split(",")):
+    for link in split_source_values(links_str):
         if not link:
             continue
         identifier = link

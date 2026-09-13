@@ -85,6 +85,32 @@ class BuiltinRemoteEvidenceTests(unittest.TestCase):
                 self.assertEqual(len(document.inline_shapes), 1)
                 self.assertEqual(paragraph.text, "")
 
+    def test_bapp_termin1_preserves_commas_inside_source_urls(self):
+        url_with_comma = "https://example.test/api/evidence,latest"
+        second_url = "https://example.test/api/evidence-2"
+        for module in (bapp_ppl, bapp_pml):
+            with self.subTest(module=module.__name__):
+                document, paragraph = _document_with_placeholder(
+                    module.BUKTI_PLACEHOLDER
+                )
+                with patch.object(
+                    module,
+                    "_download_drive_image",
+                    side_effect=lambda _source: _image_result(),
+                ) as downloader:
+                    count, warnings = module.insert_evidence_images(
+                        document, f"{url_with_comma}, {second_url}"
+                    )
+
+                self.assertEqual(count, 2)
+                self.assertEqual(warnings, [])
+                self.assertEqual(
+                    [item.args[0] for item in downloader.call_args_list],
+                    [url_with_comma, second_url],
+                )
+                self.assertEqual(len(document.inline_shapes), 2)
+                self.assertEqual(paragraph.text, "")
+
     def test_bapp_termin2_ppl_and_pml_accept_extensionless_source_url(self):
         for module in (bapp_ppl_t2, bapp_pml_t2):
             with self.subTest(module=module.__name__):
@@ -123,6 +149,32 @@ class BuiltinRemoteEvidenceTests(unittest.TestCase):
                 self.assertEqual(warnings, [])
                 downloader.assert_called_once_with(BARE_DRIVE_ID)
                 self.assertEqual(len(document.inline_shapes), 1)
+                self.assertEqual(paragraph.text, "")
+
+    def test_bapp_termin2_preserves_commas_inside_source_urls(self):
+        url_with_comma = "https://example.test/api/evidence,latest"
+        second_url = "https://example.test/api/evidence-2"
+        for module in (bapp_ppl_t2, bapp_pml_t2):
+            with self.subTest(module=module.__name__):
+                document, paragraph = _document_with_placeholder(
+                    module.BUKTI_PLACEHOLDER
+                )
+                with patch.object(
+                    module,
+                    "_download_drive_evidence",
+                    side_effect=_evidence_result,
+                ) as downloader:
+                    count, warnings = module.insert_evidence_images(
+                        document, f"{url_with_comma}, {second_url}"
+                    )
+
+                self.assertEqual(count, 2)
+                self.assertEqual(warnings, [])
+                self.assertEqual(
+                    [item.args[0] for item in downloader.call_args_list],
+                    [url_with_comma, second_url],
+                )
+                self.assertEqual(len(document.inline_shapes), 2)
                 self.assertEqual(paragraph.text, "")
 
     def test_bast_reuses_the_termin2_universal_evidence_path(self):
