@@ -30,10 +30,50 @@ DEDICATED_MAX_HEIGHT_IN = 4.0
 DEDICATED_TITLE_SPACE_IN = 0.75
 DEDICATED_FIRST_UNIT_EXTRA_SPACE_IN = 0.25
 EMU_PER_INCH = 914400
-_HTTP_SOURCE_SEPARATOR_RE = re.compile(
-    r",(?=\s*https?://|\s+[A-Za-z0-9_-]{10,}(?=\s*(?:,|$)))",
-    re.IGNORECASE,
+_HTTP_SCHEME_RE = re.compile(r"https?://", re.IGNORECASE)
+_HTTP_SOURCE_START_RE = re.compile(r"\s*https?://", re.IGNORECASE)
+_HTTP_SOURCE_EXPLICIT_BOUNDARY_RE = re.compile(
+    r"\s+https?://", re.IGNORECASE
 )
+_BARE_DRIVE_SOURCE_START_RE = re.compile(
+    r"\s+[A-Za-z0-9_-]{10,}(?=\s*(?:,|$))"
+)
+
+
+def _split_http_source_line(text):
+    """Split one source line while retaining ambiguous URL commas."""
+    parts = []
+    start = 0
+    cursor = 0
+    while True:
+        comma = text.find(",", cursor)
+        if comma < 0:
+            break
+
+        remainder = text[comma + 1:]
+        prefix = text[start:comma]
+        http_start = _HTTP_SOURCE_START_RE.match(remainder)
+        if http_start:
+            explicit_boundary = _HTTP_SOURCE_EXPLICIT_BOUNDARY_RE.match(
+                remainder
+            )
+            nested_http = len(_HTTP_SCHEME_RE.findall(prefix)) > 1
+            if explicit_boundary or not nested_http:
+                parts.append(prefix)
+                start = comma + 1
+                cursor = start
+                continue
+
+        if _BARE_DRIVE_SOURCE_START_RE.match(remainder):
+            parts.append(prefix)
+            start = comma + 1
+            cursor = start
+            continue
+
+        cursor = comma + 1
+
+    parts.append(text[start:])
+    return parts
 
 
 def split_source_values(value):
@@ -41,24 +81,23 @@ def split_source_values(value):
 
     Existing workbooks separate multiple sources with commas. A comma inside
     a direct URL is preserved unless it is followed by the start of another
-    HTTP(S) source or a bare Drive ID after an explicit whitespace boundary;
-    bare-ID-only lists retain the legacy comma behavior. The whitespace rule
-    prevents query/path tokens after an internal URL comma from being
-    mistaken for a second source.
+    HTTP(S) source or a bare Drive ID after an explicit whitespace boundary.
+    A no-space HTTP separator is accepted only when the current URL does not
+    already contain a nested absolute HTTP(S) URL. Bare-ID-only lists retain
+    the legacy comma behavior.
     """
     text = str(value or "")
     if not text.strip():
         return []
 
-    if not re.search(r"https?://", text, re.IGNORECASE):
-        parts = text.split(",")
-    else:
-        parts = []
-        for segment in _HTTP_SOURCE_SEPARATOR_RE.split(text):
-            if re.match(r"\s*https?://", segment, re.IGNORECASE):
-                parts.append(segment)
-            else:
-                parts.extend(segment.split(","))
+    parts = []
+    for line in re.split(r"[\r\n]+", text):
+        if not line.strip():
+            continue
+        if _HTTP_SCHEME_RE.search(line):
+            parts.extend(_split_http_source_line(line))
+        else:
+            parts.extend(line.split(","))
     return [part.strip() for part in parts if part.strip()]
 
 

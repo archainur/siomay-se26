@@ -51,6 +51,10 @@ class SourceListParsingTests(unittest.TestCase):
         url_with_query_comma = "https://example.test/api?tags=alpha,beta"
         first_url = "https://example.test/image1"
         second_url = "https://example.test/image2"
+        nested_http_urls = (
+            "https://example.test/image?targets="
+            "https://a.test/x,https://b.test/y"
+        )
         second_drive_id = "0ZyXwVuTsRqPoNmLkJiHgFeDcBa987"
 
         cases = (
@@ -73,6 +77,16 @@ class SourceListParsingTests(unittest.TestCase):
                 "two HTTP URLs",
                 f"{first_url}, {second_url}",
                 [first_url, second_url],
+            ),
+            (
+                "two HTTP URLs without whitespace",
+                f"{first_url},{second_url}",
+                [first_url, second_url],
+            ),
+            (
+                "nested HTTP URLs in query",
+                nested_http_urls,
+                [nested_http_urls],
             ),
             (
                 "HTTP URL and bare Drive ID",
