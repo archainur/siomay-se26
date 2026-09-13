@@ -5,7 +5,7 @@
 **SIOMAY** adalah aplikasi desktop Windows untuk membuat dokumen administrasi Sensus Ekonomi 2026 (SE2026) secara massal dari data Microsoft Excel dan template Microsoft Word. Aplikasi memandu pengguna dari pemilihan dokumen hingga penyimpanan hasil, sekaligus memvalidasi input untuk mengurangi kesalahan dan menjaga konsistensi dokumen.
 
 > **Status:** Stable<br>
-> **Versi saat ini:** `v2026.1.8`<br>
+> **Versi saat ini:** `v2026.1.9`<br>
 > **Platform rilis:** Windows x64
 
 ## Daftar Isi
@@ -77,7 +77,7 @@ Nomor urut BAPP Termin 2 dan BAST yang bersifat numerik diformat menjadi tiga di
 
 ## Instalasi
 
-1. Buka halaman [GitHub Releases SIOMAY](https://github.com/Mjulianfr001056/siomay-se26/releases).
+1. Buka halaman [GitHub Releases SIOMAY](https://github.com/archainur/siomay-se26/releases).
 2. Pilih rilis yang diinginkan dan unduh `SIOMAY-<tag>-windows.zip`.
 3. Cocokkan checksum SHA-256 arsip dengan nilai yang tercantum pada catatan rilis.
 4. Ekstrak **seluruh** isi ZIP ke folder yang dapat ditulis, misalnya `Documents\SIOMAY`.
@@ -229,7 +229,7 @@ Punya kendala atau saran pengembangan? Kirimkan umpan balik Anda melalui form be
 Prasyarat: Windows, Python 3.14, Git, dan PowerShell.
 
 ```powershell
-git clone https://github.com/Mjulianfr001056/siomay-se26.git
+git clone https://github.com/archainur/siomay-se26.git
 cd siomay-se26
 py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -289,7 +289,7 @@ docs/           Dokumentasi teknis dan panduan rilis
 
 ## Rilis, Publisher, dan Lisensi
 
-- **Rilis:** <https://github.com/Mjulianfr001056/siomay-se26/releases>
+- **Rilis:** <https://github.com/archainur/siomay-se26/releases>
 - **Changelog:** [`CHANGELOG.md`](CHANGELOG.md)
 - **Publisher:** 6304 - Muhammad Julian Firdaus, S.Tr.Stat.
 - **Application ID:** `id.go.bps.siomay`

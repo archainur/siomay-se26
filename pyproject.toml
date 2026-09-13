@@ -1,6 +1,6 @@
 [project]
 name = "siomay"
-version = "2026.1.8"
+version = "2026.1.9"
 description = "SIOMAY: Sistem Otomasi Massal dan Terpercaya"
 readme = "README.md"
 requires-python = ">=3.13,<3.15"
@@ -31,10 +31,10 @@ module = "app"
 dir = "assets"
 
 [tool.siomay.release]
-display-version = "v2026.1.8"
-package-version = "2026.1.8"
+display-version = "v2026.1.9"
+package-version = "2026.1.9"
 channel = "stable"
 windows-minimum-version = "Windows 10 version 1809 (x64)"
 windows-architecture = "x64"
 application-identifier = "id.go.bps.siomay"
-repository = "https://github.com/Mjulianfr001056/siomay-se26"
+repository = "https://github.com/archainur/siomay-se26"

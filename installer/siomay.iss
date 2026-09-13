@@ -3,9 +3,9 @@
 ; Keep AppId unchanged for every future SIOMAY upgrade.
 
 #define MyAppName "SIOMAY"
-#define MyAppVersion "2026.1.0.1"
+#define MyAppVersion "2026.1.9"
 #define MyAppPublisher "6304 - Muhammad Julian Firdaus, S.Tr.Stat."
-#define MyAppURL "https://github.com/Mjulianfr001056/siomay-se26"
+#define MyAppURL "https://github.com/archainur/siomay-se26"
 #define MyAppExeName "siomay.exe"
 #define MyBuildDir "..\build\windows"
 

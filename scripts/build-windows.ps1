@@ -31,7 +31,7 @@ flet build windows . `
     --org id.go.bps `
     --company "6304 - Muhammad Julian Firdaus, S.Tr.Stat." `
     --copyright "Copyright (c) 2026 6304 - Muhammad Julian Firdaus, S.Tr.Stat." `
-    --build-version 2026.1.0.1 `
+    --build-version 2026.1.9 `
     --exclude data db generator __pycache__ .git .github tests docs installer scripts updates
 
 if ($LASTEXITCODE -ne 0) {

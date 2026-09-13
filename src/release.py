@@ -6,14 +6,14 @@ APP_NAME = "SIOMAY"
 APP_TITLE = "SIOMAY — Sistem Otomasi Massal dan Terpercaya"
 APP_FULL_NAME = "SIOMAY: Sistem Otomasi Massal dan Terpercaya"
 PUBLISHER = "6304 - Muhammad Julian Firdaus, S.Tr.Stat."
-DISPLAY_VERSION = "v2026.1.8"
-PACKAGE_VERSION = "2026.1.8"
+DISPLAY_VERSION = "v2026.1.9"
+PACKAGE_VERSION = "2026.1.9"
 RELEASE_CHANNEL = "stable"
 APPLICATION_IDENTIFIER = "id.go.bps.siomay"
-REPOSITORY_URL = "https://github.com/Mjulianfr001056/siomay-se26"
+REPOSITORY_URL = "https://github.com/archainur/siomay-se26"
 RELEASES_URL = f"{REPOSITORY_URL}/releases"
 UPDATE_MANIFEST_URL = (
-    f"https://raw.githubusercontent.com/Mjulianfr001056/siomay-se26/"
+    f"https://raw.githubusercontent.com/archainur/siomay-se26/"
     f"master/updates/{RELEASE_CHANNEL}.json"
 )
 

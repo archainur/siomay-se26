@@ -200,9 +200,9 @@ jobs:
             package_version = $buildVersion
             published_at = $publishedAt
             mandatory = $false
-            download_url = "https://github.com/Mjulianfr001056/siomay-se26/releases/tag/$tag"
+            download_url = "https://github.com/archainur/siomay-se26/releases/tag/$tag"
             sha256 = $hash
-            release_notes_url = "https://github.com/Mjulianfr001056/siomay-se26/releases/tag/$tag"
+            release_notes_url = "https://github.com/archainur/siomay-se26/releases/tag/$tag"
           }
           $manifestJson = $manifest | ConvertTo-Json -Depth 4
 

@@ -6,6 +6,12 @@ Semua perubahan penting pada proyek SIOMAY didokumentasikan di berkas ini. Forma
 
 ## [Unreleased]
 
+Belum ada perubahan.
+
+---
+
+## [v2026.1.9] - 2026-09-13
+
 ### Ditambahkan
 - **Sumber Bukti Dukung Universal**: BAPP Termin 1, BAPP Termin 2, BAST, Bukti Terima, dan placeholder kustom kini dapat mengambil gambar dari URL HTTP(S) langsung, termasuk endpoint self-hosted/OpenCloud-compatible.
 - **URL Tanpa Ekstensi**: Resource gambar ditentukan dari byte yang berhasil didekode, sehingga URL API tanpa ekstensi tetap didukung.

@@ -24,11 +24,11 @@ class UpdateManifestTests(unittest.TestCase):
                 "display_version": "v2026.1.4",
                 "package_version": "2026.1.4",
                 "download_url": (
-                    "https://github.com/Mjulianfr001056/siomay-se26/releases/"
+                    "https://github.com/archainur/siomay-se26/releases/"
                     "download/v2026.1.4/SIOMAY-v2026.1.4-windows.zip"
                 ),
                 "release_notes_url": (
-                    "https://github.com/Mjulianfr001056/siomay-se26/releases/tag/"
+                    "https://github.com/archainur/siomay-se26/releases/tag/"
                     "v2026.1.4"
                 ),
             })
@@ -40,8 +40,8 @@ class UpdateManifestTests(unittest.TestCase):
         update = parse_update_manifest({
             "display_version": "v2026.1.4",
             "package_version": "2026.1.4",
-            "download_url": "https://github.com/Mjulianfr001056/siomay-se26/releases",
-            "release_notes_url": "https://github.com/Mjulianfr001056/siomay-se26/releases",
+            "download_url": "https://github.com/archainur/siomay-se26/releases",
+            "release_notes_url": "https://github.com/archainur/siomay-se26/releases",
         })
 
         self.assertIsNone(update)
@@ -61,11 +61,11 @@ class UpdateManifestTests(unittest.TestCase):
                 "display_version": "v2026.1.4",
                 "package_version": "2026.1.4",
                 "download_url": (
-                    "https://github.com/Mjulianfr001056/siomay-se26/"
+                    "https://github.com/archainur/siomay-se26/"
                     "releases-unofficial/Setup.exe"
                 ),
                 "release_notes_url": (
-                    "https://github.com/Mjulianfr001056/siomay-se26/"
+                    "https://github.com/archainur/siomay-se26/"
                     "releases-unofficial/notes"
                 ),
             })
@@ -73,7 +73,7 @@ class UpdateManifestTests(unittest.TestCase):
 
 class ReleaseChangelogTests(unittest.TestCase):
     RELEASE_URL = (
-        "https://github.com/Mjulianfr001056/siomay-se26/releases/tag/v2026.2.0"
+        "https://github.com/archainur/siomay-se26/releases/tag/v2026.2.0"
     )
 
     @patch("src.updates.requests.get")
@@ -89,7 +89,7 @@ class ReleaseChangelogTests(unittest.TestCase):
 
         self.assertEqual(result, "## Yang baru\n\n- Perbaikan penting")
         mock_get.assert_called_once_with(
-            "https://api.github.com/repos/Mjulianfr001056/siomay-se26/"
+            "https://api.github.com/repos/archainur/siomay-se26/"
             "releases/tags/v2026.2.0",
             headers={"Accept": "application/vnd.github+json"},
             timeout=3.0,
@@ -116,9 +116,9 @@ class ReleaseChangelogTests(unittest.TestCase):
         manifest_response = Mock()
         manifest_response.content = (
             b'{"display_version":"v2026.2.0","package_version":"2026.2.0",'
-            b'"download_url":"https://github.com/Mjulianfr001056/siomay-se26/'
+            b'"download_url":"https://github.com/archainur/siomay-se26/'
             b'releases/tag/v2026.2.0","release_notes_url":"https://github.com/'
-            b'Mjulianfr001056/siomay-se26/releases/tag/v2026.2.0"}'
+            b'archainur/siomay-se26/releases/tag/v2026.2.0"}'
         )
         notes_response = Mock()
         notes_response.json.return_value = {
@@ -144,9 +144,9 @@ class ReleaseChangelogTests(unittest.TestCase):
         manifest_response = Mock()
         manifest_response.content = (
             b'{"display_version":"v2026.2.0","package_version":"2026.2.0",'
-            b'"download_url":"https://github.com/Mjulianfr001056/siomay-se26/'
+            b'"download_url":"https://github.com/archainur/siomay-se26/'
             b'releases/tag/v2026.2.0","release_notes_url":"https://github.com/'
-            b'Mjulianfr001056/siomay-se26/releases/tag/v2026.2.0"}'
+            b'archainur/siomay-se26/releases/tag/v2026.2.0"}'
         )
         mock_get.return_value = manifest_response
 
