@@ -6,7 +6,7 @@ Port dari notebook 'generator/Generator_Bukti_Terima_Juli (7).ipynb'.
 Membuat dokumen A4 berisi grid 2x2 tetap per halaman dari dokumen kosong
 (bukan dari template .docx). Tiap sel berisi:
   - Nama lengkap (bold, centered)
-  - Foto dari Google Drive (lazy-download via requests)
+  - Foto dari Google Drive atau URL HTTP(S) (lazy-download via requests)
   - Detail: NIK, Wilayah Tugas, Operator, No Telp
 
 Input Excel:
@@ -35,7 +35,7 @@ except ImportError:
 from utils.images import (
     HAS_HEIF,
     HAS_PIL,
-    download_drive_image as _download_drive_image,
+    download_image_source as _universal_image_downloader,
 )
 
 
@@ -69,10 +69,10 @@ TEXT_ALLOWANCE_CM = 2.6
 IMAGE_BOX_WIDTH_CM  = COL_WIDTH_CM - CELL_PADDING_CM            # 8.5
 IMAGE_BOX_HEIGHT_CM = max(ROW_HEIGHT_CM - TEXT_ALLOWANCE_CM, 3.0)
 
-# ── Utilitas Google Drive ──────────────────────────────────────────────────
+# ── Kompatibilitas helper lama dan downloader universal ─────────────────────
 
 def _extract_file_id(link: str):
-    """Ekstrak File ID dari berbagai format tautan Google Drive."""
+    """Ekstrak File ID untuk kompatibilitas helper lama."""
     if not link or not str(link).strip():
         return None
     link = str(link).strip()
@@ -88,6 +88,20 @@ def _extract_file_id(link: str):
     if re.fullmatch(r"[a-zA-Z0-9_-]{10,}", link):
         return link
     return None
+
+
+_default_image_downloader = _universal_image_downloader
+_download_drive_image = _default_image_downloader
+
+
+def _download_image_source(url: str):
+    """Download one complete image URL through the shared resolver."""
+    # Retain the old injectable module name for callers/tests that patched the
+    # former Google Drive-only downloader. Legacy patches receive a file ID.
+    file_id = _extract_file_id(url)
+    if file_id and _download_drive_image is not _default_image_downloader:
+        return _download_drive_image(file_id)
+    return _download_drive_image(url)
 
 
 # ── Helper OOXML / layout ──────────────────────────────────────────────────
@@ -201,8 +215,7 @@ def _fill_person_cell(cell, row_data: dict, idx: int) -> list:
     _tighten_paragraph(p_img)
     run_img = p_img.add_run()
 
-    file_id = _extract_file_id(link)
-    if file_id:
+    if link:
         if not HAS_PIL:
             run_img.text = "[Pillow tidak tersedia — foto dilewati]"
             run_img.italic = True
@@ -210,8 +223,10 @@ def _fill_person_cell(cell, row_data: dict, idx: int) -> list:
                 f"[{idx + 1}] Pillow tidak terpasang; foto dilewati."
             )
         else:
+            fh = None
+            img = None
             try:
-                fh, img = _download_drive_image(file_id)
+                fh, img = _download_image_source(link)
                 img_w, img_h = img.size
                 target_w, target_h = _fit_box(
                     img_w, img_h,
@@ -224,26 +239,22 @@ def _fill_person_cell(cell, row_data: dict, idx: int) -> list:
                 )
             except Exception as exc:
                 msg = str(exc)
-                if "403" in msg or "forbidden" in msg.lower():
-                    reason = f"Akses ditolak (403) untuk file {file_id}"
-                elif "404" in msg:
-                    reason = f"File {file_id} tidak ditemukan (404)"
-                else:
-                    reason = f"Gagal memuat file {file_id}: {msg}"
                 run_img.text = "[Gagal memuat gambar]"
                 run_img.italic = True
-                warnings_out.append(f"[{idx + 1}] {reason}")
+                warnings_out.append(
+                    f"[{idx + 1}] Gagal memuat gambar dari {link[:160]}: {msg}"
+                )
+            finally:
+                if img is not None:
+                    img.close()
+                if fh is not None:
+                    fh.close()
     else:
         run_img.text = "[Foto tidak tersedia]"
         run_img.italic = True
-        if link:
-            warnings_out.append(
-                f"[{idx + 1}] Tautan tidak dikenali: {link[:80]}"
-            )
-        else:
-            warnings_out.append(
-                f"[{idx + 1}] Kolom link_bukti_terima kosong."
-            )
+        warnings_out.append(
+            f"[{idx + 1}] Kolom link_bukti_terima kosong."
+        )
 
     # Baris 3: Metadata detail
     detail_lines = [
@@ -340,7 +351,7 @@ def generate_input_template(file_path: str):
         "wilayah_tugas":     "[050] ANJIR MUARA",
         "operator":          "BY.U",
         "no_telp":           "08xxxxxxxxxx",
-        "link_bukti_terima": "https://drive.google.com/open?id=FILE_ID_DISINI",
+        "link_bukti_terima": "https://example.go.id/api/dokumen/123/gambar",
     }
     for col_idx, col_name in enumerate(all_cols, 1):
         cell = ws.cell(row=2, column=col_idx, value=sample.get(col_name, ""))

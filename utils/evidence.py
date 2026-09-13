@@ -1,4 +1,4 @@
-"""Shared DOCX layout engine for image and PDF evidence from Google Drive."""
+"""Shared DOCX layout engine for image and PDF evidence sources."""
 
 import io
 
@@ -240,10 +240,31 @@ def insert_evidence_items(doc, target, items, image_layout,
     return len(items)
 
 
-def insert_evidence(doc, links_str, placeholder, image_layout, extract_file_id,
-                    replace_text, evidence_downloader,
-                    image_orientation=IMAGE_ORIENTATION_PORTRAIT):
-    """Insert ordered images/PDF pages; PDF pages are always dedicated pages."""
+def insert_evidence(
+    doc,
+    links_str,
+    placeholder,
+    image_layout,
+    extract_file_id=None,
+    replace_text=None,
+    evidence_downloader=None,
+    image_orientation=IMAGE_ORIENTATION_PORTRAIT,
+    *,
+    source_downloader=None,
+):
+    """Insert ordered images/PDF pages; PDF pages are always dedicated pages.
+
+    ``source_downloader`` is the preferred API and receives each complete
+    HTTP(S) source URL. The older ``extract_file_id`` + ``evidence_downloader``
+    contract remains available for callers outside the repository so existing
+    Google Drive integrations do not break during the migration.
+    """
+    if replace_text is None:
+        raise ValueError("Fungsi penggantian placeholder wajib tersedia.")
+    if source_downloader is None and (
+        extract_file_id is None or evidence_downloader is None
+    ):
+        raise ValueError("Downloader bukti dukung wajib tersedia.")
     if image_layout not in IMAGE_LAYOUTS:
         raise ValueError(f"Mode tata letak gambar tidak dikenal: {image_layout}")
     if image_orientation not in IMAGE_ORIENTATIONS:
@@ -262,20 +283,25 @@ def insert_evidence(doc, links_str, placeholder, image_layout, extract_file_id,
     for link in (value.strip() for value in str(links_str).split(",")):
         if not link:
             continue
-        file_id = extract_file_id(link)
-        if not file_id:
-            warnings.append("Tautan tidak dikenali: " + link)
-            continue
+        identifier = link
         try:
-            items.extend(evidence_downloader(file_id))
+            if source_downloader is not None:
+                items.extend(source_downloader(link))
+            else:
+                file_id = extract_file_id(link)
+                identifier = file_id
+                if not file_id:
+                    warnings.append("Tautan tidak dikenali: " + link)
+                    continue
+                items.extend(evidence_downloader(file_id))
         except Exception as exc:
             message = str(exc)
             if "403" in message or "forbidden" in message.lower():
-                warnings.append(f"Akses ditolak (403) untuk {file_id}")
+                warnings.append(f"Akses ditolak (403): {identifier}")
             elif "404" in message:
-                warnings.append(f"File {file_id} tidak ditemukan")
+                warnings.append(f"File tidak ditemukan (404): {identifier}")
             else:
-                warnings.append(f"Gagal memuat {file_id}: {message}")
+                warnings.append(f"Gagal memuat {identifier}: {message}")
 
     if not items:
         return 0, warnings

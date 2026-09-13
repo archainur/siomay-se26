@@ -29,7 +29,7 @@ from src.document_generator import (
 from utils.images import (
     HAS_HEIF,
     HAS_PIL,
-    download_drive_evidence as _download_drive_evidence,
+    download_evidence_source as _universal_evidence_downloader,
 )
 from utils.evidence import (
     IMAGE_ORIENTATION_AUTOMATIC,
@@ -165,7 +165,7 @@ def generate_input_template(file_path: str):
         "no_spk": "B-001/SPK-PML-SE2026/6304/PL.200/2026",
         "no_urut_bapp_t2": "001",
         "jml_sls_t2": "12",
-        "bukti_dukung_bapp_t2": "https://drive.google.com/open?id=XXXXX",
+        "bukti_dukung_bapp_t2": "https://example.go.id/api/dokumen/123/gambar",
     }
     for col_idx, col_name in enumerate(REQUIRED_COLUMNS, 1):
         cell = ws.cell(row=2, column=col_idx, value=sample.get(col_name, ""))
@@ -269,7 +269,7 @@ def replace_text_preserving_runs(doc: Document, replacements: dict) -> None:
 
 
 def _extract_file_id(link: str):
-    """Ambil file ID dari tautan Google Drive."""
+    """Ambil file ID dari tautan Google Drive untuk kompatibilitas lama."""
     link = link.strip()
     if not link:
         return None
@@ -285,21 +285,40 @@ def _extract_file_id(link: str):
     return None
 
 
-def insert_gdrive_images(doc: Document, links_str: str,
-                         placeholder: str = None,
-                         image_layout: str = IMAGE_LAYOUT_GRID,
-                         image_orientation: str = IMAGE_ORIENTATION_PORTRAIT):
-    """Sisipkan gambar/PDF; tiap halaman PDF selalu memakai halaman khusus."""
+_default_evidence_downloader = _universal_evidence_downloader
+_download_drive_evidence = _default_evidence_downloader
+
+
+def _download_evidence_source(url: str):
+    """Download one complete evidence URL through the shared resolver."""
+    # Keep the old module-level name injectable for callers/tests that patched
+    # the former Google Drive-only downloader. A patched legacy downloader
+    # receives the old file ID for Drive URLs; production always receives the
+    # complete URL through the universal resolver.
+    file_id = _extract_file_id(url)
+    if file_id and _download_drive_evidence is not _default_evidence_downloader:
+        return _download_drive_evidence(file_id)
+    return _download_drive_evidence(url)
+
+
+def insert_evidence_images(doc: Document, links_str: str,
+                           placeholder: str = None,
+                           image_layout: str = IMAGE_LAYOUT_GRID,
+                           image_orientation: str = IMAGE_ORIENTATION_PORTRAIT):
+    """Sisipkan gambar/PDF dari Google Drive atau URL HTTP(S)."""
     return _insert_evidence(
         doc,
         links_str,
         placeholder or BUKTI_PLACEHOLDER,
         image_layout,
-        _extract_file_id,
-        replace_text_preserving_runs,
-        _download_drive_evidence,
-        image_orientation,
+        replace_text=replace_text_preserving_runs,
+        image_orientation=image_orientation,
+        source_downloader=_download_evidence_source,
     )
+
+
+# Backward-compatible name retained for existing callers and templates.
+insert_gdrive_images = insert_evidence_images
 
 
 def _slug(name: str) -> str:
@@ -375,7 +394,7 @@ def iter_generate(dfs: dict, template_path: str, out_dir: str,
 
         replace_text_preserving_runs(doc, replacements)
 
-        n_img, img_warnings = insert_gdrive_images(
+        n_img, img_warnings = insert_evidence_images(
             doc, link_gd, image_layout=image_layout,
             image_orientation=image_orientation,
         )
