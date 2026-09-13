@@ -31,7 +31,7 @@ DEDICATED_TITLE_SPACE_IN = 0.75
 DEDICATED_FIRST_UNIT_EXTRA_SPACE_IN = 0.25
 EMU_PER_INCH = 914400
 _HTTP_SOURCE_SEPARATOR_RE = re.compile(
-    r",(?=\s*(?:https?://|[A-Za-z0-9_-]{10,}(?=\s*(?:,|$))))",
+    r",(?=\s*https?://|\s+[A-Za-z0-9_-]{10,}(?=\s*(?:,|$)))",
     re.IGNORECASE,
 )
 
@@ -41,8 +41,10 @@ def split_source_values(value):
 
     Existing workbooks separate multiple sources with commas. A comma inside
     a direct URL is preserved unless it is followed by the start of another
-    HTTP(S) source or a bare Drive ID; bare-ID-only lists retain the legacy
-    comma behavior.
+    HTTP(S) source or a bare Drive ID after an explicit whitespace boundary;
+    bare-ID-only lists retain the legacy comma behavior. The whitespace rule
+    prevents query/path tokens after an internal URL comma from being
+    mistaken for a second source.
     """
     text = str(value or "")
     if not text.strip():

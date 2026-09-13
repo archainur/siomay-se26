@@ -42,6 +42,59 @@ def _document_with_placeholder(placeholder):
     return document, paragraph
 
 
+class SourceListParsingTests(unittest.TestCase):
+    def test_split_source_values_uses_conservative_boundaries(self):
+        url_with_short_token = "https://example.test/api/evidence,latest"
+        url_with_long_token = (
+            "https://example.test/api?ids=abcdefghijk,klmnopqrstuv"
+        )
+        url_with_query_comma = "https://example.test/api?tags=alpha,beta"
+        first_url = "https://example.test/image1"
+        second_url = "https://example.test/image2"
+        second_drive_id = "0ZyXwVuTsRqPoNmLkJiHgFeDcBa987"
+
+        cases = (
+            (
+                "short internal token",
+                url_with_short_token,
+                [url_with_short_token],
+            ),
+            (
+                "long internal token",
+                url_with_long_token,
+                [url_with_long_token],
+            ),
+            (
+                "query comma",
+                url_with_query_comma,
+                [url_with_query_comma],
+            ),
+            (
+                "two HTTP URLs",
+                f"{first_url}, {second_url}",
+                [first_url, second_url],
+            ),
+            (
+                "HTTP URL and bare Drive ID",
+                f"{first_url}, {BARE_DRIVE_ID}",
+                [first_url, BARE_DRIVE_ID],
+            ),
+            (
+                "two bare Drive IDs",
+                f"{BARE_DRIVE_ID}, {second_drive_id}",
+                [BARE_DRIVE_ID, second_drive_id],
+            ),
+            (
+                "three mixed sources",
+                f"{url_with_short_token}, {BARE_DRIVE_ID}, {second_url}",
+                [url_with_short_token, BARE_DRIVE_ID, second_url],
+            ),
+        )
+        for label, value, expected in cases:
+            with self.subTest(label=label):
+                self.assertEqual(evidence.split_source_values(value), expected)
+
+
 class BuiltinRemoteEvidenceTests(unittest.TestCase):
     def test_bapp_termin1_ppl_and_pml_accept_extensionless_source_url(self):
         for module in (bapp_ppl, bapp_pml):
