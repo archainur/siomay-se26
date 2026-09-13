@@ -63,6 +63,18 @@ class _ChunkedResponse(_Response):
             yield chunk
 
 
+class _InterruptedChunkedResponse(_Response):
+    def __init__(self, first_chunk, **kwargs):
+        super().__init__(b"", **kwargs)
+        self.first_chunk = first_chunk
+
+    def iter_content(self, chunk_size):
+        yield self.first_chunk
+        raise requests.exceptions.ChunkedEncodingError(
+            "incomplete chunked response"
+        )
+
+
 def _jpeg_bytes(size=(12, 8), *, orientation=None):
     source = io.BytesIO()
     image = Image.new("RGB", size, "blue")
@@ -238,6 +250,23 @@ class RemoteImageSourceTests(unittest.TestCase):
 
         image.close()
         self.assertEqual(get.call_count, 2)
+
+    def test_chunked_encoding_error_retries_then_succeeds(self):
+        failed = _InterruptedChunkedResponse(b"partial")
+        success = _Response(_jpeg_bytes())
+        with patch(
+            "utils.images.requests.get",
+            side_effect=[failed, success],
+        ) as get, patch("utils.images.time.sleep") as sleep:
+            stream, image = download_url_image(self.URL)
+
+        self.assertEqual(stream.read(8), b"\x89PNG\r\n\x1a\n")
+        image.close()
+        stream.close()
+        self.assertEqual(get.call_count, 2)
+        sleep.assert_called_once()
+        self.assertTrue(failed.closed)
+        self.assertTrue(success.closed)
 
     def test_download_size_limit_checks_header_before_reading_body(self):
         response = _Response(

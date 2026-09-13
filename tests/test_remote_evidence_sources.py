@@ -177,6 +177,73 @@ class BuiltinRemoteEvidenceTests(unittest.TestCase):
                 self.assertEqual(len(document.inline_shapes), 2)
                 self.assertEqual(paragraph.text, "")
 
+    def test_mixed_http_and_bare_drive_sources_remain_separate(self):
+        url_with_comma = "https://example.test/api/evidence,latest"
+        mixed_sources = f"{url_with_comma}, {BARE_DRIVE_ID}"
+
+        for module in (bapp_ppl, bapp_pml):
+            with self.subTest(module=module.__name__):
+                document, paragraph = _document_with_placeholder(
+                    module.BUKTI_PLACEHOLDER
+                )
+                with patch.object(
+                    module,
+                    "_download_drive_image",
+                    side_effect=lambda _source: _image_result(),
+                ) as downloader:
+                    count, warnings = module.insert_evidence_images(
+                        document, mixed_sources
+                    )
+
+                self.assertEqual(count, 2)
+                self.assertEqual(warnings, [])
+                self.assertEqual(
+                    [item.args[0] for item in downloader.call_args_list],
+                    [url_with_comma, BARE_DRIVE_ID],
+                )
+                self.assertEqual(len(document.inline_shapes), 2)
+                self.assertEqual(paragraph.text, "")
+
+        for module in (bapp_ppl_t2, bapp_pml_t2):
+            with self.subTest(module=module.__name__):
+                document, paragraph = _document_with_placeholder(
+                    module.BUKTI_PLACEHOLDER
+                )
+                with patch.object(
+                    module,
+                    "_download_drive_evidence",
+                    side_effect=_evidence_result,
+                ) as downloader:
+                    count, warnings = module.insert_evidence_images(
+                        document, mixed_sources
+                    )
+
+                self.assertEqual(count, 2)
+                self.assertEqual(warnings, [])
+                self.assertEqual(
+                    [item.args[0] for item in downloader.call_args_list],
+                    [url_with_comma, BARE_DRIVE_ID],
+                )
+                self.assertEqual(len(document.inline_shapes), 2)
+                self.assertEqual(paragraph.text, "")
+
+        document, paragraph = _document_with_placeholder(bast.BUKTI_PLACEHOLDER)
+        with patch.object(
+            bapp_ppl_t2, "_download_drive_evidence", side_effect=_evidence_result
+        ) as downloader:
+            count, warnings = bast.insert_evidence_images(
+                document, mixed_sources, placeholder=bast.BUKTI_PLACEHOLDER
+            )
+
+        self.assertEqual(count, 2)
+        self.assertEqual(warnings, [])
+        self.assertEqual(
+            [item.args[0] for item in downloader.call_args_list],
+            [url_with_comma, BARE_DRIVE_ID],
+        )
+        self.assertEqual(len(document.inline_shapes), 2)
+        self.assertEqual(paragraph.text, "")
+
     def test_bast_reuses_the_termin2_universal_evidence_path(self):
         document, paragraph = _document_with_placeholder(bast.BUKTI_PLACEHOLDER)
         with patch.object(

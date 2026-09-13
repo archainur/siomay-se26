@@ -559,6 +559,15 @@ def _download_url_bytes(
                 source=url,
                 kind="connection",
             ) from exc
+        except requests.exceptions.ChunkedEncodingError as exc:
+            if attempt < max_retries:
+                _wait_before_retry(attempt, max_retries, retry_delay)
+                continue
+            raise SourceDownloadError(
+                f"Gagal mengunduh resource: {url}",
+                source=url,
+                kind="network",
+            ) from exc
         except requests.RequestException as exc:
             raise SourceDownloadError(
                 f"Gagal mengunduh resource: {url}",
